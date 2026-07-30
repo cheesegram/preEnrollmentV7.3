@@ -1,0 +1,14 @@
+[{
+  "_id": {
+    "$oid": "69bf3eb0f70f96e172ae019e"
+  },
+  "section": "A",
+  "year": "1",
+  "regular": 1,
+  "irregular": 1,
+  "regular_capacity": 40,
+  "irregular_capacity": 10,
+  "total_capacity": 50,
+  "semester": "1st",
+  "status": "Available"
+}]

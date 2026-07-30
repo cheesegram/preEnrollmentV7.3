@@ -1,0 +1,39 @@
+[{
+  "_id": {
+    "$oid": "6a5da3c9d27b066a99fd3547"
+  },
+  "birth_date": "2005-11-22",
+  "college_address": "Baliwag Bulacan",
+  "college_school": "Dalubhasaang Politekniko ng Lungsod ng Baliwag",
+  "contact_number": "09481993569",
+  "course": "Bachelor of Science in Information Technology",
+  "createdAt": {
+    "$date": "2026-07-16T05:07:11.510Z"
+  },
+  "elementary_address": "Poblacion, Pulilan, Bulacan",
+  "elementary_school": "Pulilan Central School",
+  "email": "juanreyes@gmail.com",
+  "father_contact": "09481993569",
+  "father_name": "Jose Carlo S. Reyes",
+  "first_name": "Juan Pedro",
+  "junior_high_address": "Poblacion, Pulilan, Bulacan",
+  "junior_high_school": "Virgillio V. Donisio Memorial High School",
+  "last_name": "Reyes",
+  "middle_name": "Acosta",
+  "mother_contact": "09481993569",
+  "mother_name": "Vivian Loraine A. Reyes",
+  "password": "password123",
+  "permanent_address": "123, NR, Taal, Pulilan, Bulacan, 3005",
+  "present_address": "123, NR, Taal, Pulilan, Bulacan, 3005",
+  "school_year": "2026-2027",
+  "senior_high_address": "Cutcot, Pulilan, Bulacan",
+  "senior_high_school": "Academia De Pulilan Incorporated",
+  "status": "Block",
+  "updatedAt": {
+    "$date": "2026-07-17T06:27:46.129Z"
+  },
+  "student_number": "202600001",
+  "section": "A",
+  "semester": "1st",
+  "year": 1
+}]

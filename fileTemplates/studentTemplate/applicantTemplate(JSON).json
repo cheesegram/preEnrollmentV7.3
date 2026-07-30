@@ -1,0 +1,205 @@
+[{
+  "_id": {
+    "$oid": "6a49c52ba747dbb53592eb94"
+  },
+  "email": "sample@email.com",
+  "password": "password123",
+  "schoolYear": "2026-2027",
+  "isSubmitted": true,
+  "admissionStatus": "Confirmed",
+  "interviewStatus": "Passed",
+  "examStatus": "Passed",
+  "isInterviewed": true,
+  "interviewer": "IITI",
+  "isExamined": true,
+  "isSameAddress": true,
+  "disability": true,
+  "indigenous": true,
+  "soloParent": true,
+  "fourPs": true,
+  "isEmailSent": true,
+  "documents": [
+    {
+      "filename": "documents-1783219711113.png",
+      "originalName": "birth_cert___download.png",
+      "path": "/uploads/documents-1783219711113.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebc7"
+      }
+    },
+    {
+      "filename": "documents-1783219711121.png",
+      "originalName": "birth_cert___download.png",
+      "path": "/uploads/documents-1783219711121.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebc8"
+      }
+    },
+    {
+      "filename": "documents-1783219711121.png",
+      "originalName": "grade_11_card___download.png",
+      "path": "/uploads/documents-1783219711121.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebc9"
+      }
+    },
+    {
+      "filename": "documents-1783219711121.png",
+      "originalName": "grade_11_card___download.png",
+      "path": "/uploads/documents-1783219711121.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebca"
+      }
+    },
+    {
+      "filename": "documents-1783219711133.png",
+      "originalName": "form_138___download.png",
+      "path": "/uploads/documents-1783219711133.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebcb"
+      }
+    },
+    {
+      "filename": "documents-1783219711136.png",
+      "originalName": "form_138___download.png",
+      "path": "/uploads/documents-1783219711136.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebcc"
+      }
+    },
+    {
+      "filename": "documents-1783219711176.png",
+      "originalName": "diploma___download.png",
+      "path": "/uploads/documents-1783219711176.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebcd"
+      }
+    },
+    {
+      "filename": "documents-1783219711176.png",
+      "originalName": "diploma___download.png",
+      "path": "/uploads/documents-1783219711176.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebce"
+      }
+    },
+    {
+      "filename": "documents-1783219711177.png",
+      "originalName": "good_moral___download.png",
+      "path": "/uploads/documents-1783219711177.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebcf"
+      }
+    },
+    {
+      "filename": "documents-1783219711178.png",
+      "originalName": "good_moral___download.png",
+      "path": "/uploads/documents-1783219711178.png",
+      "uploadedAt": {
+        "$date": "2026-07-05T02:48:31.583Z"
+      },
+      "_id": {
+        "$oid": "6a49c5ffa747dbb53592ebd0"
+      }
+    }
+  ],
+  "createdAt": {
+    "$date": "2026-07-05T02:44:59.259Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-17T06:27:46.022Z"
+  },
+  "__v": 1,
+  "applicantType": "SHS Graduate",
+  "birthDate": "2005-01-01",
+  "civilStatus": "MARRIED",
+  "contactNumber": "09123456789",
+  "fatherContact": "09198765432",
+  "fatherName": "Jhon P. Tabuzo",
+  "firstChoice": "Bachelor of Science in Information Technology",
+  "firstName": "Kenneth",
+  "gender": "male",
+  "lastName": "Tabuzo",
+  "middleName": "Peralta",
+  "motherContact": "09187654321",
+  "motherName": "Lilia P. Tabuzo",
+  "permanentBarangay": "Poblacion",
+  "permanentCity": "Pulilan",
+  "permanentHouse": "777",
+  "permanentProvince": "Bulacan",
+  "permanentStreet": "Esguerra Street",
+  "permanentZip": "3005",
+  "photo": "/uploads/photo-1783219621616.png",
+  "placeOfBirth": "Pulilan, Bulacan",
+  "presentBarangay": "Poblacion",
+  "presentCity": "Pulilan",
+  "presentHouse": "777",
+  "presentProvince": "Bulacan",
+  "presentStreet": "Esguerra Street",
+  "presentZip": "3005",
+  "secondChoice": "Bachelor of Science in Secondary Education Major in English",
+  "spouseName": "Maria H. Tabuzo",
+  "suffix": "Jr.",
+  "collegeAddress": "",
+  "collegeSchool": "",
+  "collegeYear": "",
+  "elementaryAddress": "Pulilan, Bulacan",
+  "elementarySchool": "Pulilan Central School",
+  "elementaryYear": "2015",
+  "juniorHighAddress": "Pulilan, Bulacan",
+  "juniorHighSchool": "Engr. Virgilio V. Dionisio Memorial High School",
+  "juniorHighYear": "2019",
+  "seniorHighAddress": "Pulilan, Bulacan",
+  "seniorHighGwa": "90",
+  "seniorHighSchool": "Pulilan National High School",
+  "seniorHighYear": "2021",
+  "applicantId": "A-202310523",
+  "interviewDate": "2026-07-21",
+  "interviewRatings": {
+    "1_1": "100",
+    "1_2": "100",
+    "1_3": "100",
+    "2_1": "100",
+    "2_2": "100",
+    "2_3": "100",
+    "3_1": "100",
+    "3_2": "100",
+    "3_3": "100",
+    "4_1": "100",
+    "4_2": "100",
+    "4_3": "100"
+  },
+  "interviewScore": 100,
+  "examScore": 100,
+  "status": "Confirmed",
+  "section": "A",
+  "semester": "1st",
+  "year": "1"
+}]
