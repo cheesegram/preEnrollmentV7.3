@@ -8,14 +8,14 @@ const DEFAULT_REGULAR_CAPACITY = 45;
 const DEFAULT_IRREGULAR_CAPACITY = 5;
 const DEFAULT_TOTAL_CAPACITY = 50;
 
-function getPreAdmissionModel(modelName, collectionName) {
-  const preAdmissionDb = mongoose.connection.useDb("pre-admission", { useCache: true });
-  return preAdmissionDb.models[modelName] || preAdmissionDb.model(modelName, flexibleSchema, collectionName);
-}
-
-function getPreEnrollmentModel(modelName, collectionName) {
-  const preEnrollmentDb = mongoose.connection.useDb("pre-enrollment", { useCache: true });
-  return preEnrollmentDb.models[modelName] || preEnrollmentDb.model(modelName, flexibleSchema, collectionName);
+/**
+ * Get a Mongoose model connected to the default iiti_db using a flexible schema.
+ * @param {string} modelName - The name to register the model under.
+ * @param {string} collectionName - The actual MongoDB collection name.
+ */
+function getIitiDbModel(modelName, collectionName) {
+  const db = mongoose.connection;
+  return db.models[modelName] || db.model(modelName, flexibleSchema, collectionName);
 }
 
 function normalizeText(value) {
@@ -226,8 +226,8 @@ export async function getAllStudents(req, res) {
 
 export async function getPendingApplicants(req, res) {
   try {
-    const Applicant = getPreAdmissionModel("Applicant", "applicants");
-    const Validation = getPreAdmissionModel("Validation", "validation");
+    const Applicant = getIitiDbModel("Applicant", "applicants");
+    const Validation = getIitiDbModel("Validation", "validation");
 
     const [applicants, validations] = await Promise.all([
       Applicant.find(
@@ -269,12 +269,12 @@ export async function getPendingApplicants(req, res) {
   }
 }
 
-export async function getToBeAdmittedApplicants(req, res) {
+export async function getApplicantsForEnrollment(req, res) {
   try {
-    const ToBeAdmitted = getPreEnrollmentModel("ToBeAdmitted", "to_be_admitted");
+    const Applicant = getIitiDbModel("Applicant", "applicants");
 
-    // Only fetch applicants that have year, section, and semester values
-    const applicants = await ToBeAdmitted.find(
+    // Fetch applicants that have year, section, and semester values (ready for enrollment)
+    const applicants = await Applicant.find(
       {
         $and: [
           { year: { $exists: true, $ne: null, $ne: "" } },
@@ -284,8 +284,6 @@ export async function getToBeAdmittedApplicants(req, res) {
       },
       {
         _id: 0,
-        applicantID: 1,
-        applicant_id: 1,
         applicant_number: 1,
         first_name: 1,
         last_name: 1,
@@ -297,9 +295,7 @@ export async function getToBeAdmittedApplicants(req, res) {
     ).lean();
 
     const formattedApplicants = applicants.map((applicant) => {
-      const applicantID = String(
-        applicant.applicantID ?? applicant.applicant_id ?? applicant.applicant_number ?? ""
-      ).trim();
+      const applicantID = String(applicant.applicant_number ?? "").trim();
       const firstName = String(applicant.first_name ?? "").trim();
       const lastName = String(applicant.last_name ?? "").trim();
 
@@ -315,122 +311,7 @@ export async function getToBeAdmittedApplicants(req, res) {
 
     res.status(200).json(formattedApplicants);
   } catch (error) {
-    console.error("Error in getToBeAdmittedApplicants controller", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-}
-
-export async function getAdmittedApplicants(req, res) {
-  try {
-    const AdmittedApplicants = getPreAdmissionModel("AdmittedApplicant", "admitted-applicants");
-
-    // Only fetch applicants that have year, section, and semester values
-    const applicants = await AdmittedApplicants.find(
-      {
-        $and: [
-          {
-            $or: [
-              { year: { $exists: true, $ne: null, $ne: "" } },
-              { curriculum_year: { $exists: true, $ne: null, $ne: "" } },
-              { year_level: { $exists: true, $ne: null, $ne: "" } },
-            ],
-          },
-          {
-            $or: [
-              { section: { $exists: true, $ne: null, $ne: "" } },
-              { curriculum_section: { $exists: true, $ne: null, $ne: "" } },
-              { section_name: { $exists: true, $ne: null, $ne: "" } },
-            ],
-          },
-          {
-            $or: [
-              { semester: { $exists: true, $ne: null, $ne: "" } },
-              { curriculum_semester: { $exists: true, $ne: null, $ne: "" } },
-              { term: { $exists: true, $ne: null, $ne: "" } },
-            ],
-          },
-        ],
-      }
-    ).lean();
-
-    const formattedApplicants = applicants.map((applicant) => {
-      // Try multiple possible field name variations
-      const applicantID = String(
-        applicant.applicantID ??
-        applicant.applicant_id ??
-        applicant.applicant_number ??
-        applicant.applicantId ??
-        applicant.id ??
-        applicant._id ??
-        ""
-      ).trim();
-
-      const firstName = String(
-        applicant.first_name ??
-        applicant.firstName ??
-        applicant.firstname ??
-        applicant.given_name ??
-        applicant.givenName ??
-        ""
-      ).trim();
-
-      const lastName = String(
-        applicant.last_name ??
-        applicant.lastName ??
-        applicant.lastname ??
-        applicant.family_name ??
-        applicant.familyName ??
-        applicant.surname ??
-        ""
-      ).trim();
-
-      const status = String(
-        applicant.status ??
-        applicant.enrollment_status ??
-        applicant.enrollmentStatus ??
-        "Pending"
-      ).trim() || "Pending";
-
-      // Extract year, semester, section for grouping
-      const year = String(
-        applicant.year ??
-        applicant.curriculum_year ??
-        applicant.year_level ??
-        ""
-      ).trim();
-
-      const semester = String(
-        applicant.semester ??
-        applicant.curriculum_semester ??
-        applicant.term ??
-        ""
-      ).trim();
-
-      const section = String(
-        applicant.section ??
-        applicant.curriculum_section ??
-        applicant.section_name ??
-        ""
-      ).trim();
-
-      return {
-        applicantID,
-        applicant_name: `${firstName} ${lastName}`.trim(),
-        status,
-        year: year || "N/A",
-        semester: semester || "N/A",
-        section: section || "N/A",
-      };
-    }).filter((applicant) => {
-      // Only include applicants that have all three attributes after extraction
-      if (!applicant.applicantID && !applicant.applicant_name && !applicant.status) return false;
-      if (applicant.year === "N/A" || applicant.semester === "N/A" || applicant.section === "N/A") return false;
-      return true;
-    });
-
-    res.status(200).json(formattedApplicants);
-  } catch (error) {
-    console.error("Error in getAdmittedApplicants controller", error);
+    console.error("Error in getApplicantsForEnrollment controller", error);
     res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -554,7 +435,7 @@ export async function updateStudent(req, res) {
   }
 }
 
-export async function enrollFromToBeAdmitted(req, res) {
+export async function enrollFromApplicant(req, res) {
   try {
     const { applicantID } = req.body;
 
@@ -562,62 +443,42 @@ export async function enrollFromToBeAdmitted(req, res) {
       return res.status(400).json({ message: "applicantID is required" });
     }
 
-    // Build a flexible search query trying multiple field name/number formats
+    const Applicant = getIitiDbModel("Applicant", "applicants");
+
+    // Build search conditions trying multiple field name/number formats
     const searchConditions = [
-      { applicantID },
-      { applicant_id: applicantID },
       { applicant_number: applicantID },
       { applicant_number: Number(applicantID) },
+      { applicantID },
+      { applicant_id: applicantID },
       { applicantId: applicantID },
       { applicantId: Number(applicantID) },
     ];
 
-    // Try to match by _id as both string and ObjectId
     if (mongoose.Types.ObjectId.isValid(applicantID)) {
       searchConditions.push({ _id: new mongoose.Types.ObjectId(applicantID) });
     }
 
-    // First, find the applicant without deleting — to check for duplicate student_number
-    const AdmittedApplicants = getPreAdmissionModel("AdmittedApplicant", "admitted-applicants");
-
-    let applicant = await AdmittedApplicants.findOne({
-      $or: searchConditions,
-    }).lean();
-
-    let sourceDb = "admitted-applicants";
+    const applicant = await Applicant.findOne({ $or: searchConditions }).lean();
 
     if (!applicant) {
-      // Fall back to to_be_admitted in pre-enrollment DB
-      const ToBeAdmitted = getPreEnrollmentModel("ToBeAdmitted", "to_be_admitted");
-      applicant = await ToBeAdmitted.findOne({
-        $or: [
-          { applicantID },
-          { applicant_id: applicantID },
-          { applicant_number: applicantID },
-          { applicant_number: Number(applicantID) },
-        ],
-      }).lean();
-      sourceDb = "to_be_admitted";
-
-      if (!applicant) {
-        return res.status(404).json({ message: "Applicant not found in database" });
-      }
+      return res.status(404).json({ message: "Applicant not found" });
     }
 
     // Copy all attributes from the applicant, omitting _id and __v
     const { _id, __v, ...applicantData } = applicant;
 
-    // Generate student_number by stripping "A-" from applicant_id
+    // Generate student_number from applicant_number
     const rawId = String(
+      applicantData.applicant_number ??
       applicantData.applicantID ??
       applicantData.applicant_id ??
-      applicantData.applicant_number ??
       applicantData.applicantId ??
       ""
     ).trim();
     const studentNumber = rawId.replace(/^A-?/i, "");
 
-    // Check if student_number already exists in the database BEFORE deleting the applicant
+    // Check if student_number already exists
     const existingStudent = await Student.findOne({ student_number: studentNumber }).lean();
     if (existingStudent) {
       return res.status(409).json({
@@ -627,22 +488,8 @@ export async function enrollFromToBeAdmitted(req, res) {
       });
     }
 
-    // Duplicate check passed — now delete the applicant from whichever source it came from
-    if (sourceDb === "admitted-applicants") {
-      await AdmittedApplicants.findOneAndDelete({
-        $or: searchConditions,
-      }).lean();
-    } else {
-      const ToBeAdmitted = getPreEnrollmentModel("ToBeAdmitted", "to_be_admitted");
-      await ToBeAdmitted.findOneAndDelete({
-        $or: [
-          { applicantID },
-          { applicant_id: applicantID },
-          { applicant_number: applicantID },
-          { applicant_number: Number(applicantID) },
-        ],
-      }).lean();
-    }
+    // Delete the applicant from the source collection
+    await Applicant.findOneAndDelete({ $or: searchConditions }).lean();
 
     // Get existing sections for auto-sectioning
     const existingSections = await Section.find({}).lean();
@@ -742,21 +589,21 @@ export async function enrollFromToBeAdmitted(req, res) {
       student,
     });
   } catch (error) {
-    console.error("Error in enrollFromToBeAdmitted controller", error);
+    console.error("Error in enrollFromApplicant controller", error);
     res.status(500).json({ message: "Internal server error" });
   }
 }
 
 /**
- * Helper: find an applicant by ID from admitted-applicants (fallback to to_be_admitted).
- * Returns { applicant, applicantData, studentNumber, sourceDb } or null if not found.
+ * Helper: find an applicant by ID from the applicants collection.
+ * Returns { applicant, applicantData, studentNumber } or null if not found.
  */
 async function findApplicantForEnrollment(applicantID) {
   const searchConditions = [
-    { applicantID },
-    { applicant_id: applicantID },
     { applicant_number: applicantID },
     { applicant_number: Number(applicantID) },
+    { applicantID },
+    { applicant_id: applicantID },
     { applicantId: applicantID },
     { applicantId: Number(applicantID) },
   ];
@@ -765,36 +612,22 @@ async function findApplicantForEnrollment(applicantID) {
     searchConditions.push({ _id: new mongoose.Types.ObjectId(applicantID) });
   }
 
-  const AdmittedApplicants = getPreAdmissionModel("AdmittedApplicant", "admitted-applicants");
-  let applicant = await AdmittedApplicants.findOne({ $or: searchConditions }).lean();
-  let sourceDb = "admitted-applicants";
-
-  if (!applicant) {
-    const ToBeAdmitted = getPreEnrollmentModel("ToBeAdmitted", "to_be_admitted");
-    applicant = await ToBeAdmitted.findOne({
-      $or: [
-        { applicantID },
-        { applicant_id: applicantID },
-        { applicant_number: applicantID },
-        { applicant_number: Number(applicantID) },
-      ],
-    }).lean();
-    sourceDb = "to_be_admitted";
-  }
+  const Applicant = getIitiDbModel("Applicant", "applicants");
+  const applicant = await Applicant.findOne({ $or: searchConditions }).lean();
 
   if (!applicant) return null;
 
   const { _id, __v, ...applicantData } = applicant;
   const rawId = String(
+    applicantData.applicant_number ??
     applicantData.applicantID ??
     applicantData.applicant_id ??
-    applicantData.applicant_number ??
     applicantData.applicantId ??
     ""
   ).trim();
   const studentNumber = rawId.replace(/^A-?/i, "");
 
-  return { applicant, applicantData, studentNumber, sourceDb };
+  return { applicant, applicantData, studentNumber };
 }
 
 /**
@@ -893,7 +726,7 @@ export async function batchEnrollPreview(req, res) {
   }
 }
 
-export async function batchEnrollFromToBeAdmitted(req, res) {
+export async function batchEnrollFromApplicants(req, res) {
   try {
     const { applicantIDs } = req.body;
 
@@ -914,7 +747,7 @@ export async function batchEnrollFromToBeAdmitted(req, res) {
           continue;
         }
 
-        const { applicantData, studentNumber, sourceDb } = found;
+        const { applicantData, studentNumber } = found;
 
         // Check for duplicate student_number
         const existingStudent = await Student.findOne({ student_number: studentNumber }).lean();
@@ -937,12 +770,12 @@ export async function batchEnrollFromToBeAdmitted(req, res) {
         };
         const chosenSection = chooseSectionForStudent(sectionGroups, tempStudent);
 
-        // Delete from source
+        // Delete from applicants collection
         const searchConditions = [
-          { applicantID },
-          { applicant_id: applicantID },
           { applicant_number: applicantID },
           { applicant_number: Number(applicantID) },
+          { applicantID },
+          { applicant_id: applicantID },
           { applicantId: applicantID },
           { applicantId: Number(applicantID) },
         ];
@@ -951,21 +784,8 @@ export async function batchEnrollFromToBeAdmitted(req, res) {
           searchConditions.push({ _id: new mongoose.Types.ObjectId(applicantID) });
         }
 
-        let deleted = null;
-        if (sourceDb === "admitted-applicants") {
-          const AdmittedApplicants = getPreAdmissionModel("AdmittedApplicant", "admitted-applicants");
-          deleted = await AdmittedApplicants.findOneAndDelete({ $or: searchConditions }).lean();
-        } else {
-          const ToBeAdmitted = getPreEnrollmentModel("ToBeAdmitted", "to_be_admitted");
-          deleted = await ToBeAdmitted.findOneAndDelete({
-            $or: [
-              { applicantID },
-              { applicant_id: applicantID },
-              { applicant_number: applicantID },
-              { applicant_number: Number(applicantID) },
-            ],
-          }).lean();
-        }
+        const Applicant = getIitiDbModel("Applicant", "applicants");
+        const deleted = await Applicant.findOneAndDelete({ $or: searchConditions }).lean();
 
         if (!deleted) {
           results.notFound.push({ applicantID });
@@ -998,6 +818,7 @@ export async function batchEnrollFromToBeAdmitted(req, res) {
         } else {
           chosenSection.regular = Number(chosenSection.regular ?? 0) + 1;
         }
+
         chosenSection.status = toStatus(chosenSection.regular, chosenSection.irregular, chosenSection.regular_capacity);
 
         // Upsert the section
@@ -1047,7 +868,7 @@ export async function batchEnrollFromToBeAdmitted(req, res) {
       ...results,
     });
   } catch (error) {
-    console.error("Error in batchEnrollFromToBeAdmitted controller", error);
+    console.error("Error in batchEnrollFromApplicants controller", error);
     res.status(500).json({ message: "Internal server error" });
   }
 }

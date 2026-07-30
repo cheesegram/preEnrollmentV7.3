@@ -25,8 +25,8 @@ function normalizeYearKey(year) {
 }
 
 function getCurriculumModel() {
-  const preEnrollmentDb = mongoose.connection.useDb("pre-enrollment", { useCache: true });
-  return preEnrollmentDb.models.Curriculum || preEnrollmentDb.model("Curriculum", flexibleSchema, "curriculum");
+  const db = mongoose.connection;
+  return db.models.Curriculum || db.model("Curriculum", flexibleSchema, "curriculums");
 }
 
 function buildSubjects(data) {

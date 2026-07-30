@@ -130,7 +130,7 @@ function Dashboard() {
         try {
             const [studentsRes, pendingRes] = await Promise.all([
                 api.get("/students", { params: { t: Date.now() } }),
-                api.get("/students/pre-admission/admitted-applicants", { params: { t: Date.now() } }),
+                api.get("/students/applicants", { params: { t: Date.now() } }),
             ]);
 
             setStudents(Array.isArray(studentsRes.data) ? studentsRes.data : []);
@@ -308,7 +308,7 @@ function Dashboard() {
         if (isEnrolling) return;
         try {
             setIsEnrolling(true);
-            const response = await api.post("/students/enroll-from-to-be-admitted", {
+            const response = await api.post("/students/enroll", {
                 applicantID: applicant.applicantID,
             });
             const successMsg = `Enrolled ${applicant.applicant_name} (${applicant.applicantID}) successfully`;
@@ -316,7 +316,7 @@ function Dashboard() {
             pushImportNotification(successMsg, "success");
             await fetchStudents();
             await fetchSections();
-            const pendingRes = await api.get("/students/pre-admission/admitted-applicants", { params: { t: Date.now() } });
+            const pendingRes = await api.get("/students/applicants", { params: { t: Date.now() } });
             setPendingApplicants(Array.isArray(pendingRes.data) ? pendingRes.data : []);
         } catch (error) {
             console.error("Enroll failed", error);
@@ -570,7 +570,7 @@ function Dashboard() {
 
             await fetchStudents();
             await fetchSections();
-            const pendingRes = await api.get("/students/pre-admission/admitted-applicants", { params: { t: Date.now() } });
+            const pendingRes = await api.get("/students/applicants", { params: { t: Date.now() } });
             setPendingApplicants(Array.isArray(pendingRes.data) ? pendingRes.data : []);
             setSelectedSectionGroup(null);
             setShowEnrollmentPreview(false);

@@ -151,7 +151,7 @@ function StudentList() {
       try {
         setLoading(true);
         const response = isPendingView
-          ? await api.get("/students/pre-admission/admitted-applicants")
+          ? await api.get("/students/applicants")
           : await api.get("/students", {
               params: selectedStatus !== "All Registered" ? { status: selectedStatus } : undefined,
             });

@@ -1,14 +1,13 @@
 import express from "express";
 import {
-  batchEnrollFromToBeAdmitted,
+  batchEnrollFromApplicants,
   batchEnrollPreview,
   createStudent,
   deleteStudent,
-  enrollFromToBeAdmitted,
+  enrollFromApplicant,
   getAllStudents,
   getPendingApplicants,
-  getToBeAdmittedApplicants,
-  getAdmittedApplicants,
+  getApplicantsForEnrollment,
   getStudentById,
   getStudentSections,
   getStudentBySection,
@@ -20,13 +19,12 @@ const router = express.Router();
 
 router.get("/", getAllStudents);
 router.get("/pending", getPendingApplicants);
-router.get("/pre-enrollment/to_be_admitted", getToBeAdmittedApplicants);
-router.get("/pre-admission/admitted-applicants", getAdmittedApplicants);
+router.get("/applicants", getApplicantsForEnrollment);
 router.get("/sections", getStudentSections);
 router.get("/section/:section", getStudentBySection);
-router.post("/enroll-from-to-be-admitted", enrollFromToBeAdmitted);
+router.post("/enroll", enrollFromApplicant);
 router.post("/batch-enroll-preview", batchEnrollPreview);
-router.post("/batch-enroll", batchEnrollFromToBeAdmitted);
+router.post("/batch-enroll", batchEnrollFromApplicants);
 router.post("/import", importStudents);
 router.get("/:id", getStudentById);
 router.post("/", createStudent);
