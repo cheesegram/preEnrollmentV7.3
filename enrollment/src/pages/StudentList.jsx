@@ -87,10 +87,10 @@ function StudentList() {
     if (normalizedQuery) {
       result = result.filter((student) => {
         const number = String(
-          isPendingView ? student.applicant_number ?? student.applicantID : student.student_number
+          isPendingView ? student.applicantId ?? student.applicantID : student.studentNumber
         ).toLowerCase();
-        const firstName = String(student.first_name ?? "").trim().toLowerCase();
-        const lastName = String(student.last_name ?? "").trim().toLowerCase();
+        const firstName = String(student.firstName ?? "").trim().toLowerCase();
+        const lastName = String(student.lastName ?? "").trim().toLowerCase();
         const applicantName = String(student.applicant_name ?? "").trim().toLowerCase();
         const fullName = isPendingView ? applicantName : `${firstName} ${lastName}`.trim();
         const reverseName = `${lastName} ${firstName}`.trim();
@@ -131,7 +131,7 @@ function StudentList() {
       });
       if (sectionDifference !== 0) return sectionDifference;
 
-      return String(left.student_number ?? "").localeCompare(String(right.student_number ?? ""), undefined, {
+      return String(left.studentNumber ?? "").localeCompare(String(right.studentNumber ?? ""), undefined, {
         numeric: true,
         sensitivity: "base",
       });

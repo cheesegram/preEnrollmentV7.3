@@ -44,9 +44,9 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
     if (!q) return irregularStudents;
 
     return irregularStudents.filter((student) => {
-      const number = String(student.student_number ?? "").toLowerCase();
-      const first = String(student.first_name ?? "").toLowerCase();
-      const last = String(student.last_name ?? "").toLowerCase();
+      const number = String(student.studentNumber ?? "").toLowerCase();
+      const first = String(student.firstName ?? "").toLowerCase();
+      const last = String(student.lastName ?? "").toLowerCase();
       const full = `${first} ${last}`.trim().toLowerCase();
       const reverse = `${last} ${first}`.trim().toLowerCase();
 
@@ -97,10 +97,9 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
         const students = Array.isArray(res.data) ? res.data : [];
         setIrregularStudents(students);
 
-        // Fetch curriculum status for each irregular student
         const withCurriculum = new Set();
         for (const student of students) {
-          const studentNumber = String(student.student_number ?? "").trim();
+          const studentNumber = String(student.studentNumber ?? "").trim();
           if (!studentNumber) continue;
 
           try {
@@ -112,8 +111,6 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
               withCurriculum.add(studentNumber);
             }
           } catch {
-            // If 404 or error, student doesn't have curriculum
-            // Continue without adding to the set
           }
         }
         setStudentsWithCurriculum(withCurriculum);
@@ -162,7 +159,6 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
       throw new Error("Invalid curriculum template format");
     }
 
-    // Use a plain JSON-safe object for API payload consistency.
     return JSON.parse(JSON.stringify(jsonData[0]));
   };
 
@@ -245,7 +241,7 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
   };
 
   const openIrregularStudent = async (student) => {
-    const docId = String(student?.student_number ?? "").trim();
+    const docId = String(student?.studentNumber ?? "").trim();
     if (!docId) {
       toast.error("Student number is required");
       return;
@@ -277,14 +273,13 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
       setIrregularCurriculumLoading(true);
       const parsedJson = await parseCurriculumImportFile(file);
 
-      const docId = String(selectedIrregularStudent.student_number ?? "").trim();
+      const docId = String(selectedIrregularStudent.studentNumber ?? "").trim();
       const postRes = await api.post(`/curriculum/doc/${encodeURIComponent(docId)}`, {
         data: parsedJson,
       });
 
       if (postRes?.data?.data) {
         setSelectedIrregularCurriculum(postRes.data.data);
-        // Add to students with curriculum set
         setStudentsWithCurriculum((prev) => new Set([...prev, docId]));
       }
 
@@ -306,9 +301,9 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
         return;
       }
 
-      const studentNumber = String(selectedIrregularStudent.student_number ?? "").trim();
-      const first = String(selectedIrregularStudent.first_name ?? "").trim();
-      const last = String(selectedIrregularStudent.last_name ?? "").trim();
+      const studentNumber = String(selectedIrregularStudent.studentNumber ?? "").trim();
+      const first = String(selectedIrregularStudent.firstName ?? "").trim();
+      const last = String(selectedIrregularStudent.lastName ?? "").trim();
       const studentName = `${first} ${last}`.trim();
       const base = `curriculum_${studentNumber}_${studentName}`;
 
@@ -472,19 +467,19 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
                 <tbody className="divide-y divide-gray-100">
                   {irregularFilteredStudents.length ? (
                     irregularFilteredStudents.map((student) => {
-                      const hasCurriculum = studentsWithCurriculum.has(String(student.student_number ?? "").trim());
+                      const hasCurriculum = studentsWithCurriculum.has(String(student.studentNumber ?? "").trim());
                       const rowClasses = hasCurriculum
                         ? "cursor-pointer hover:bg-gray-50/80 transition-colors"
                         : "cursor-pointer hover:bg-red-50/80 transition-colors bg-red-50 border-l-4 border-l-red-500";
 
                       return (
                         <tr
-                          key={student._id || student.student_number}
+                          key={student._id || student.studentNumber}
                           onClick={() => openIrregularStudent(student)}
                           className={rowClasses}
                         >
-                          <td className="px-4 py-3 text-gray-800 font-medium">{student.student_number}</td>
-                          <td className="px-4 py-3 text-gray-700">{`${student.first_name ?? ""} ${student.last_name ?? ""}`.trim()}</td>
+                          <td className="px-4 py-3 text-gray-800 font-medium">{student.studentNumber}</td>
+                          <td className="px-4 py-3 text-gray-700">{`${student.firstName ?? ""} ${student.lastName ?? ""}`.trim()}</td>
                         </tr>
                       );
                     })
@@ -563,7 +558,7 @@ export default function CurriculumTable({ onRegularImportSuccess }) {
               <div>
                 <h3 className="text-xl font-bold text-gray-900">Irregular Curriculum</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  {selectedIrregularStudent?.student_number} <span className="mx-1">•</span> {`${selectedIrregularStudent?.first_name ?? ""} ${selectedIrregularStudent?.last_name ?? ""}`.trim()}
+                  {selectedIrregularStudent?.studentNumber} <span className="mx-1">•</span> {`${selectedIrregularStudent?.firstName ?? ""} ${selectedIrregularStudent?.lastName ?? ""}`.trim()}
                 </p>
               </div>
               <button

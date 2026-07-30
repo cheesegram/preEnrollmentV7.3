@@ -223,13 +223,13 @@ function Dashboard() {
         if (modalQuery) {
             const q = modalQuery.trim().toLowerCase();
             result = result.filter(s => {
-                const first_name = String(s.first_name ?? "").trim().toLowerCase();
-                const last_name = String(s.last_name ?? "").trim().toLowerCase();
-                const num = String(s.student_number ?? "").toLowerCase();
-                const name = `${first_name} ${last_name}`.trim().toLowerCase();
-                const reverse_name = `${last_name} ${first_name}`.trim().toLowerCase();
+                const firstName = String(s.firstName ?? "").trim().toLowerCase();
+                const lastName = String(s.lastName ?? "").trim().toLowerCase();
+                const num = String(s.studentNumber ?? "").toLowerCase();
+                const name = `${firstName} ${lastName}`.trim().toLowerCase();
+                const reverseName = `${lastName} ${firstName}`.trim().toLowerCase();
 
-                if (/^[a-z]/i.test(q)) return first_name.includes(q) || last_name.includes(q) || name.includes(q) || reverse_name.includes(q);
+                if (/^[a-z]/i.test(q)) return firstName.includes(q) || lastName.includes(q) || name.includes(q) || reverseName.includes(q);
                 return num.includes(q);
             });
         }
@@ -242,8 +242,8 @@ function Dashboard() {
         if (!q) return list;
 
         return list.filter((s) => {
-            const studentNumber = String(s.student_number ?? "").toLowerCase();
-            const fullName = `${String(s.first_name ?? "")} ${String(s.last_name ?? "")}`.trim().toLowerCase();
+            const studentNumber = String(s.studentNumber ?? "").toLowerCase();
+            const fullName = `${String(s.firstName ?? "")} ${String(s.lastName ?? "")}`.trim().toLowerCase();
             const section = String(s.section ?? "").toLowerCase();
             const year = String(s.year ?? "").toLowerCase();
             return studentNumber.includes(q) || fullName.includes(q) || section.includes(q) || year.includes(q);
@@ -333,7 +333,7 @@ function Dashboard() {
 
             // Log blocked enrollment details if available
             if (responseStatus === 409 && blockReason === "student_exists") {
-                const studentNumber = error?.response?.data?.student_number;
+                const studentNumber = error?.response?.data?.studentNumber;
                 const detailMsg = `${applicant.applicant_name} (${applicant.applicantID}) : Enrollment blocked - Student number ${studentNumber} already exists in the database`;
                 pushImportNotification(detailMsg, "error");
             }
@@ -380,8 +380,8 @@ function Dashboard() {
             if (blocked.length > 0 && importType === "section") {
                 // For section imports, show each blocked student
                 blocked.forEach((student) => {
-                    const name = `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim();
-                    const studentNumber = String(student.student_number ?? "").trim();
+                    const name = `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim();
+                    const studentNumber = String(student.studentNumber ?? "").trim();
                     console.log(`[Frontend] Showing error for blocked student: ${name}`);
                     const msg = `${studentNumber} - ${name} : Student number already exist in the database`;
                     toast.error(msg);
@@ -389,15 +389,15 @@ function Dashboard() {
                 });
                 if (imported > 0) {
                     const blockedNumbers = new Set(
-                        blocked.map((student) => String(student.student_number ?? "").trim())
+                        blocked.map((student) => String(student.studentNumber ?? "").trim())
                     );
                     const importedStudents = parsedStudents.filter(
-                        (student) => !blockedNumbers.has(String(student.student_number ?? "").trim())
+                        (student) => !blockedNumbers.has(String(student.studentNumber ?? "").trim())
                     );
 
                     importedStudents.forEach((student) => {
-                        const studentNumber = String(student.student_number ?? "").trim();
-                        const name = `${String(student.first_name ?? "").trim()} ${String(student.last_name ?? "").trim()}`.trim();
+                        const studentNumber = String(student.studentNumber ?? "").trim();
+                        const name = `${String(student.firstName ?? "").trim()} ${String(student.lastName ?? "").trim()}`.trim();
                         const detailMsg = `${studentNumber} - ${name} : Imported successfully`;
                         pushImportNotification(detailMsg, "success");
                     });
@@ -412,8 +412,8 @@ function Dashboard() {
                 );
 
                 parsedStudents.forEach((student) => {
-                    const studentNumber = String(student.student_number ?? "").trim();
-                    const name = `${String(student.first_name ?? "").trim()} ${String(student.last_name ?? "").trim()}`.trim();
+                    const studentNumber = String(student.studentNumber ?? "").trim();
+                    const name = `${String(student.firstName ?? "").trim()} ${String(student.lastName ?? "").trim()}`.trim();
                     const detailMsg = `${studentNumber} - ${name} : Imported successfully`;
                     pushImportNotification(detailMsg, "success");
                 });
@@ -436,8 +436,8 @@ function Dashboard() {
                     const duplicates = error?.response?.data?.duplicates ?? [];
                     if (duplicates.length > 0) {
                         duplicates.forEach((student) => {
-                            const studentNumber = String(student.student_number ?? "").trim();
-                            const name = `${String(student.first_name ?? "").trim()} ${String(student.last_name ?? "").trim()}`.trim();
+                            const studentNumber = String(student.studentNumber ?? "").trim();
+                            const name = `${String(student.firstName ?? "").trim()} ${String(student.lastName ?? "").trim()}`.trim();
                             const msg = `${studentNumber} - ${name} : Student number already exist in the database`;
                             toast.error(msg);
                             pushImportNotification(msg, "error");
@@ -452,8 +452,8 @@ function Dashboard() {
                     const blocked = error?.response?.data?.blocked ?? [];
                     if (blocked.length > 0) {
                         blocked.forEach((student) => {
-                            const name = `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim();
-                            const studentNumber = String(student.student_number ?? "").trim();
+                            const name = `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim();
+                            const studentNumber = String(student.studentNumber ?? "").trim();
                             console.log(`[Frontend] Showing error for blocked student: ${name}`);
                             const msg = `${studentNumber} - ${name} : Student number already exist in the database`;
                             toast.error(msg);
@@ -554,7 +554,15 @@ function Dashboard() {
                 pushImportNotification(msg, "success");
             });
             blocked.forEach((item) => {
-                const msg = `${item.applicant_name} (${item.applicantID}) : Enrollment blocked - ${item.student_number ? "Student number already exists" : item.reason}`;
+                let blockReason = "Enrollment blocked";
+                if (item.reason === "student_exists") {
+                    blockReason = `Student number ${item.studentNumber ?? ""} already exists`;
+                } else if (item.reason === "internal_error") {
+                    blockReason = item.error || "Internal server error";
+                } else if (item.reason) {
+                    blockReason = String(item.reason);
+                }
+                const msg = `${item.applicant_name} (${item.applicantID}) : ${blockReason}`;
                 pushImportNotification(msg, "error");
             });
             notFound.forEach((item) => {
@@ -589,13 +597,13 @@ function Dashboard() {
 
         if (exportTarget.kind === "student") {
             const student = exportTarget.student;
-            const name = `${String(student.first_name ?? "").trim()} ${String(student.last_name ?? "").trim()}`.trim();
-            const base = sanitizeFileName(`${student.student_number}_${name}`);
+            const name = `${String(student.firstName ?? "").trim()} ${String(student.lastName ?? "").trim()}`.trim();
+            const base = sanitizeFileName(`${student.studentNumber}_${name}`);
             const rows = [student];
             if (format === "xlsx") {
-                exportStudentsAsXlsx(rows, base || String(student.student_number));
+                exportStudentsAsXlsx(rows, base || String(student.studentNumber));
             } else {
-                exportStudentsAsCsv(rows, base || String(student.student_number));
+                exportStudentsAsCsv(rows, base || String(student.studentNumber));
             }
         }
 
@@ -1185,9 +1193,9 @@ function Dashboard() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {exportableStudents.map((student) => (
-                                    <tr key={student._id || student.student_number}>
-                                        <td className="px-4 py-3">{student.student_number}</td>
-                                        <td className="px-4 py-3">{`${student.first_name ?? ""} ${student.last_name ?? ""}`.trim()}</td>
+                                    <tr key={student._id || student.studentNumber}>
+                                        <td className="px-4 py-3">{student.studentNumber}</td>
+                                        <td className="px-4 py-3">{`${student.firstName ?? ""} ${student.lastName ?? ""}`.trim()}</td>
                                         <td className="px-4 py-3">{student.section}</td>
                                         <td className="px-4 py-3">{student.year}</td>
                                         <td className="px-4 py-3 text-center">

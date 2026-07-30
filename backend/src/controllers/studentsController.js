@@ -1,17 +1,20 @@
 import Student from "../models/Student.js";
 import Section from "../models/Section.js";
 import mongoose from "mongoose";
+import {
+  DEFAULT_TOTAL_CAPACITY,
+  addStudentToSectionState,
+  createSectionState,
+  getSectionStatus,
+  normalizeSectionName,
+  normalizeSemester,
+  syncSectionFromStudents,
+} from "../services/sectionService.js";
 
 const flexibleSchema = new mongoose.Schema({}, { strict: false });
 
-const DEFAULT_REGULAR_CAPACITY = 45;
-const DEFAULT_IRREGULAR_CAPACITY = 5;
-const DEFAULT_TOTAL_CAPACITY = 50;
-
 /**
  * Get a Mongoose model connected to the default iiti_db using a flexible schema.
- * @param {string} modelName - The name to register the model under.
- * @param {string} collectionName - The actual MongoDB collection name.
  */
 function getIitiDbModel(modelName, collectionName) {
   const db = mongoose.connection;
@@ -22,39 +25,13 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-function normalizeSectionName(value) {
-  return normalizeText(value).toUpperCase();
-}
-
-function normalizeSemester(value) {
-  const semester = normalizeText(value);
-  return semester || "N/A";
-}
-
 function normalizeStatus(value) {
   const status = normalizeText(value);
-  if (!status) {
-    return "Enrolled";
-  }
-
+  if (!status) return "Enrolled";
   const lowered = status.toLowerCase();
-  if (lowered === "regular") {
-    return "Enrolled";
-  }
-
-  if (lowered === "irregular") {
-    return "Irregular";
-  }
-
+  if (lowered === "regular") return "Enrolled";
+  if (lowered === "irregular") return "Irregular";
   return status;
-}
-
-function toStatus(regular, irregular, totalCapacity) {
-  const total = Number(regular || 0) + Number(irregular || 0);
-  const capacity = Number(totalCapacity || 0);
-  if (total < capacity) return "Available";
-  if (total === capacity) return "Full";
-  return "Overloaded";
 }
 
 function isIrregularStatus(status) {
@@ -63,28 +40,22 @@ function isIrregularStatus(status) {
 
 function sectionNameToIndex(sectionName) {
   const normalized = normalizeSectionName(sectionName);
-  if (!/^[A-Z]+$/.test(normalized)) {
-    return Number.MAX_SAFE_INTEGER;
-  }
-
+  if (!/^[A-Z]+$/.test(normalized)) return Number.MAX_SAFE_INTEGER;
   let index = 0;
   for (const character of normalized) {
     index = index * 26 + (character.charCodeAt(0) - 64);
   }
-
   return index;
 }
 
 function indexToSectionName(index) {
   let current = index;
   let name = "";
-
   while (current > 0) {
     const remainder = (current - 1) % 26;
     name = String.fromCharCode(65 + remainder) + name;
     current = Math.floor((current - 1) / 26);
   }
-
   return name;
 }
 
@@ -92,65 +63,28 @@ function getNextSectionName(usedNames) {
   let index = 1;
   while (index < 1000) {
     const candidate = indexToSectionName(index);
-    if (!usedNames.has(candidate)) {
-      return candidate;
-    }
+    if (!usedNames.has(candidate)) return candidate;
     index += 1;
   }
-
   throw new Error("Unable to allocate a new section name");
-}
-
-function createSectionState({ year, semester, section, sourceSection = null }) {
-  const regularCapacity = Number(
-    sourceSection?.regular_capacity ?? DEFAULT_REGULAR_CAPACITY
-  );
-  const irregularCapacity = Number(
-    sourceSection?.irregular_capacity ?? DEFAULT_IRREGULAR_CAPACITY
-  );
-  const totalCapacity = Number(
-    sourceSection?.total_capacity ?? (regularCapacity + irregularCapacity) ?? DEFAULT_TOTAL_CAPACITY
-  );
-
-  return {
-    year: normalizeText(year),
-    semester: normalizeSemester(semester),
-    section: normalizeSectionName(section),
-    createdAt: new Date().toISOString(),
-    regular: 0,
-    irregular: 0,
-    regular_capacity: regularCapacity,
-    irregular_capacity: irregularCapacity,
-    total_capacity: totalCapacity,
-  };
 }
 
 function sectionHasCapacityForStudent(section, student) {
   if (isIrregularStatus(student.status)) {
-    return Number(section?.irregular ?? 0) < Number(section?.irregular_capacity ?? DEFAULT_IRREGULAR_CAPACITY);
+    return Number(section?.irregularCount ?? 0) < Number(section?.irregularCapacity ?? DEFAULT_TOTAL_CAPACITY * 0.1);
   }
-
-  return Number(section?.regular ?? 0) < Number(section?.regular_capacity ?? DEFAULT_REGULAR_CAPACITY);
+  return Number(section?.blockCount ?? 0) < Number(section?.blockCapacity ?? DEFAULT_TOTAL_CAPACITY * 0.9);
 }
 
 function sortSectionsByAge(left, right) {
   const leftCreatedAt = new Date(left?.createdAt ?? 0).getTime();
   const rightCreatedAt = new Date(right?.createdAt ?? 0).getTime();
-
-  if (leftCreatedAt !== rightCreatedAt) {
-    return leftCreatedAt - rightCreatedAt;
-  }
-
+  if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
   const leftIndex = sectionNameToIndex(left?.section);
   const rightIndex = sectionNameToIndex(right?.section);
-
-  if (leftIndex !== rightIndex) {
-    return leftIndex - rightIndex;
-  }
-
+  if (leftIndex !== rightIndex) return leftIndex - rightIndex;
   return normalizeSectionName(left?.section).localeCompare(normalizeSectionName(right?.section), undefined, {
-    numeric: true,
-    sensitivity: "base",
+    numeric: true, sensitivity: "base",
   });
 }
 
@@ -158,65 +92,67 @@ function chooseSectionForStudent(sectionGroups, student) {
   const year = normalizeText(student.year);
   const semester = normalizeSemester(student.semester);
   const groupKey = `${year}::${semester}`;
-
   let groupSections = sectionGroups.get(groupKey);
   if (!groupSections) {
     groupSections = [];
     sectionGroups.set(groupKey, groupSections);
   }
-
   const orderedSections = [...groupSections].sort(sortSectionsByAge);
   const availableSection = orderedSections.find((section) => sectionHasCapacityForStudent(section, student));
-
-  if (availableSection) {
-    return availableSection;
-  }
-
+  if (availableSection) return availableSection;
   const usedNames = new Set(groupSections.map((section) => normalizeSectionName(section.section)).filter(Boolean));
   const sourceSection = orderedSections[0] ?? null;
-  const nextSection = createSectionState({
-    year,
-    semester,
-    section: getNextSectionName(usedNames),
-    sourceSection,
-  });
+  const nextSection = createSectionState({ year, semester, section: getNextSectionName(usedNames), sourceSection });
   groupSections.push(nextSection);
   return nextSection;
 }
+
+/**
+ * Build section groups map from existing section records.
+ */
+async function buildSectionGroups() {
+  const existingSections = await Section.find({}).lean();
+  const sectionGroups = new Map();
+  for (const section of existingSections) {
+    const year = normalizeText(section.year);
+    const semester = normalizeSemester(section.semester);
+    const sectionName = normalizeSectionName(section.section);
+    if (!year || !sectionName) continue;
+    const key = `${year}::${semester}`;
+    const group = sectionGroups.get(key) || [];
+    group.push({
+      year,
+      semester,
+      section: sectionName,
+      blockCount: Number(section.blockCount ?? section.regular ?? 0),
+      irregularCount: Number(section.irregularCount ?? section.irregular ?? 0),
+      blockCapacity: Number(section.blockCapacity ?? section.regularCapacity ?? DEFAULT_TOTAL_CAPACITY * 0.9),
+      irregularCapacity: Number(section.irregularCapacity ?? DEFAULT_TOTAL_CAPACITY * 0.1),
+      totalCapacity: Number(section.totalCapacity ?? DEFAULT_TOTAL_CAPACITY),
+    });
+    sectionGroups.set(key, group);
+  }
+  return sectionGroups;
+}
+
+// ─── API Endpoints ───────────────────────────────────────────────────────────
 
 export async function getAllStudents(req, res) {
   try {
     const { status, year, section, semester } = req.query;
     const query = {};
-
-    // filter by enrollment status (the UI sends "All students" when nothing selected)
-    if (status && status !== 'All students') {
-      query.status = status;
-    }
-
-    // optional year filter (client passes year as string e.g. "1")
+    if (status && status !== 'All students') query.status = status;
     if (year && year !== 'All') {
       const num = Number(year);
       if (!Number.isNaN(num)) {
-        // accommodate documents where year might be stored as string or number
-        query.$or = [{ year: num }, { year: year }];
+        query.$or = [{ year: num }, { year }];
       } else {
         query.year = year;
       }
     }
-
-    if (section && section !== 'All') {
-      query.section = section;
-    }
-
-    if (semester && semester !== 'All') {
-      query.semester = semester;
-    }
-
-    console.log('getAllStudents query', query);
-
-    const students = await Student.find(query).sort({ createdAt: -1 }); // newest first
-    console.log('returned', students.length, 'students');
+    if (section && section !== 'All') query.section = section;
+    if (semester && semester !== 'All') query.semester = semester;
+    const students = await Student.find(query).sort({ createdAt: -1 });
     res.status(200).json(students);
   } catch (error) {
     console.error("Error in getAllStudents controller", error);
@@ -228,40 +164,29 @@ export async function getPendingApplicants(req, res) {
   try {
     const Applicant = getIitiDbModel("Applicant", "applicants");
     const Validation = getIitiDbModel("Validation", "validation");
-
     const [applicants, validations] = await Promise.all([
       Applicant.find(
-        { applicant_number: { $exists: true, $ne: null } },
-        { _id: 0, applicant_number: 1, first_name: 1, last_name: 1 }
+        { applicantId: { $exists: true, $ne: null } },
+        { _id: 0, applicantId: 1, firstName: 1, lastName: 1 }
       ).lean(),
       Validation.find(
         { applicant_number: { $exists: true, $ne: null } },
         { _id: 0, applicant_number: 1, status: 1 }
       ).lean(),
     ]);
-
-    const statusByApplicantNumber = new Map(
-      validations.map((item) => [String(item.applicant_number), item.status])
-    );
-
+    const statusByApplicantNumber = new Map(validations.map((item) => [String(item.applicant_number), item.status]));
     const pendingApplicants = applicants
       .map((applicant) => {
-        const applicantNumber = String(applicant.applicant_number);
-        const firstName = String(applicant.first_name ?? "").trim();
-        const lastName = String(applicant.last_name ?? "").trim();
+        const applicantNumber = String(applicant.applicantId ?? "");
+        const firstName = String(applicant.firstName ?? "").trim();
+        const lastName = String(applicant.lastName ?? "").trim();
         const status = statusByApplicantNumber.get(applicantNumber) ?? "Pending";
-
-        return {
-          applicant_number: applicantNumber,
-          applicant_name: `${firstName} ${lastName}`.trim(),
-          status,
-        };
+        return { applicant_number: applicantNumber, applicant_name: `${firstName} ${lastName}`.trim(), status };
       })
       .filter((item) => {
         const normalizedStatus = String(item.status ?? "").toLowerCase();
         return !normalizedStatus || normalizedStatus.includes("pending");
       });
-
     res.status(200).json(pendingApplicants);
   } catch (error) {
     console.error("Error in getPendingApplicants controller", error);
@@ -272,21 +197,21 @@ export async function getPendingApplicants(req, res) {
 export async function getApplicantsForEnrollment(req, res) {
   try {
     const Applicant = getIitiDbModel("Applicant", "applicants");
-
-    // Fetch applicants that have year, section, and semester values (ready for enrollment)
+    // Only fetch applicants that have section, year, semester AND status === "Confirmed"
     const applicants = await Applicant.find(
       {
         $and: [
-          { year: { $exists: true, $ne: null, $ne: "" } },
           { section: { $exists: true, $ne: null, $ne: "" } },
+          { year: { $exists: true, $ne: null, $ne: "" } },
           { semester: { $exists: true, $ne: null, $ne: "" } },
+          { status: "Confirmed" },
         ],
       },
       {
         _id: 0,
-        applicant_number: 1,
-        first_name: 1,
-        last_name: 1,
+        applicantId: 1,
+        firstName: 1,
+        lastName: 1,
         status: 1,
         year: 1,
         section: 1,
@@ -294,20 +219,14 @@ export async function getApplicantsForEnrollment(req, res) {
       }
     ).lean();
 
-    const formattedApplicants = applicants.map((applicant) => {
-      const applicantID = String(applicant.applicant_number ?? "").trim();
-      const firstName = String(applicant.first_name ?? "").trim();
-      const lastName = String(applicant.last_name ?? "").trim();
-
-      return {
-        applicantID,
-        applicant_name: `${firstName} ${lastName}`.trim(),
-        status: String(applicant.status ?? "Pending").trim() || "Pending",
-        year: String(applicant.year ?? "").trim(),
-        section: String(applicant.section ?? "").trim(),
-        semester: String(applicant.semester ?? "").trim(),
-      };
-    }).filter((applicant) => applicant.applicantID || applicant.applicant_name || applicant.status);
+    const formattedApplicants = applicants.map((applicant) => ({
+      applicantID: String(applicant.applicantId ?? "").trim(),
+      applicant_name: `${String(applicant.firstName ?? "").trim()} ${String(applicant.lastName ?? "").trim()}`.trim(),
+      status: String(applicant.status ?? "Pending").trim() || "Pending",
+      year: String(applicant.year ?? "").trim(),
+      section: String(applicant.section ?? "").trim(),
+      semester: String(applicant.semester ?? "").trim(),
+    })).filter((a) => a.applicantID || a.applicant_name || a.status);
 
     res.status(200).json(formattedApplicants);
   } catch (error) {
@@ -318,15 +237,11 @@ export async function getApplicantsForEnrollment(req, res) {
 
 export async function getStudentSections(req, res) {
   try {
-    const sections = await Student.distinct("section", {
-      section: { $exists: true, $ne: null },
-    });
-
+    const sections = await Student.distinct("section", { section: { $exists: true, $ne: null } });
     const normalizedSections = sections
-      .map(section => section?.trim())
+      .map((s) => s?.trim())
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }));
-
     res.status(200).json(normalizedSections);
   } catch (error) {
     console.error("Error in getStudentSections controller", error);
@@ -358,32 +273,7 @@ export async function getStudentBySection(req, res) {
 
 export async function createStudent(req, res) {
   try {
-    const {
-      student_number,
-      first_name,
-      last_name,
-      name,
-      section,
-      semester,
-      status,
-      year,
-      title,
-      content,
-    } = req.body;
-
-    const student = new Student({
-      student_number,
-      first_name,
-      last_name,
-      name,
-      section,
-      semester,
-      status,
-      year,
-      title,
-      content,
-    });
-
+    const student = new Student(req.body);
     const savedStudent = await student.save();
     res.status(201).json(savedStudent);
   } catch (error) {
@@ -394,40 +284,8 @@ export async function createStudent(req, res) {
 
 export async function updateStudent(req, res) {
   try {
-    const {
-      student_number,
-      first_name,
-      last_name,
-      name,
-      section,
-      semester,
-      status,
-      year,
-      title,
-      content,
-    } = req.body;
-
-    const updatedStudent = await Student.findByIdAndUpdate(
-      req.params.id,
-      {
-        student_number,
-        first_name,
-        last_name,
-        name,
-        section,
-        semester,
-        status,
-        year,
-        title,
-        content,
-      },
-      {
-        new: true,
-      }
-    );
-
+    const updatedStudent = await Student.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updatedStudent) return res.status(404).json({ message: "Student not found" });
-
     res.status(200).json(updatedStudent);
   } catch (error) {
     console.error("Error in updateStudent controller", error);
@@ -435,159 +293,88 @@ export async function updateStudent(req, res) {
   }
 }
 
+export async function deleteStudent(req, res) {
+  try {
+    const deletedStudent = await Student.findByIdAndDelete(req.params.id);
+    if (!deletedStudent) return res.status(404).json({ message: "Student not found" });
+    res.status(200).json({ message: "Student deleted successfully!" });
+  } catch (error) {
+    console.error("Error in deleteStudent controller", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+// ─── Enrollment Logic ────────────────────────────────────────────────────────
+
 export async function enrollFromApplicant(req, res) {
   try {
     const { applicantID } = req.body;
-
-    if (!applicantID) {
-      return res.status(400).json({ message: "applicantID is required" });
-    }
+    if (!applicantID) return res.status(400).json({ message: "applicantID is required" });
 
     const Applicant = getIitiDbModel("Applicant", "applicants");
-
-    // Build search conditions trying multiple field name/number formats
     const searchConditions = [
-      { applicant_number: applicantID },
-      { applicant_number: Number(applicantID) },
-      { applicantID },
-      { applicant_id: applicantID },
       { applicantId: applicantID },
       { applicantId: Number(applicantID) },
+      { applicantID },
+      { applicant_id: applicantID },
+      { applicant_number: applicantID },
+      { applicant_number: Number(applicantID) },
     ];
-
     if (mongoose.Types.ObjectId.isValid(applicantID)) {
       searchConditions.push({ _id: new mongoose.Types.ObjectId(applicantID) });
     }
 
     const applicant = await Applicant.findOne({ $or: searchConditions }).lean();
+    if (!applicant) return res.status(404).json({ message: "Applicant not found" });
 
-    if (!applicant) {
-      return res.status(404).json({ message: "Applicant not found" });
-    }
-
-    // Copy all attributes from the applicant, omitting _id and __v
-    const { _id, __v, ...applicantData } = applicant;
-
-    // Generate student_number from applicant_number
+    // Generate studentNumber from applicantId (strip "A-" prefix)
     const rawId = String(
-      applicantData.applicant_number ??
-      applicantData.applicantID ??
-      applicantData.applicant_id ??
-      applicantData.applicantId ??
-      ""
+      applicant.applicantId ?? applicant.applicantID ?? applicant.applicant_id ?? applicant.applicant_number ?? ""
     ).trim();
     const studentNumber = rawId.replace(/^A-?/i, "");
 
-    // Check if student_number already exists
-    const existingStudent = await Student.findOne({ student_number: studentNumber }).lean();
+    // Check for duplicate studentNumber
+    const existingStudent = await Student.findOne({ studentNumber }).lean();
     if (existingStudent) {
       return res.status(409).json({
         message: "Enrollment blocked: Student number already exists",
         blockReason: "student_exists",
-        student_number: studentNumber,
+        studentNumber,
       });
     }
 
-    // Delete the applicant from the source collection
-    await Applicant.findOneAndDelete({ $or: searchConditions }).lean();
-
-    // Get existing sections for auto-sectioning
-    const existingSections = await Section.find({}).lean();
-    const sectionGroups = new Map();
-    for (const section of existingSections) {
-      const year = normalizeText(section.year);
-      const semester = normalizeSemester(section.semester);
-      const sectionName = normalizeSectionName(section.section);
-      if (!year || !sectionName) {
-        continue;
-      }
-
-      const key = `${year}::${semester}`;
-      const group = sectionGroups.get(key) || [];
-      group.push({
-        year,
-        semester,
-        section: sectionName,
-        regular: Number(section.regular ?? 0),
-        irregular: Number(section.irregular ?? 0),
-        regular_capacity: Number(section.regular_capacity ?? DEFAULT_REGULAR_CAPACITY),
-        irregular_capacity: Number(section.irregular_capacity ?? DEFAULT_IRREGULAR_CAPACITY),
-        total_capacity: Number(section.total_capacity ?? (DEFAULT_REGULAR_CAPACITY + DEFAULT_IRREGULAR_CAPACITY)),
-      });
-      sectionGroups.set(key, group);
-    }
-
-    // Create a temporary student object for section selection
-    const tempStudent = {
-      ...applicantData,
-      year: 1,
-      semester: "1st",
-      status: "Block",
-    };
-
-    // Choose section using auto-sectioning logic
+    // Build section groups for auto-sectioning
+    const sectionGroups = await buildSectionGroups();
+    const tempStudent = { ...applicant, year: 1, semester: "1st", status: "Block" };
     const chosenSection = chooseSectionForStudent(sectionGroups, tempStudent);
 
-    // Build the student object with all applicant attributes
+    // Build the student object — normalize all fields from applicant to camelCase
+    const normalizedApplicant = normalizeImportedStudent(applicant);
     const now = new Date();
     const student = {
-      ...applicantData,
-      student_number: studentNumber,
+      ...normalizedApplicant,
+      studentNumber,
       status: "Block",
-      year: 1,
+      year: "1",
       semester: "1st",
       section: chosenSection.section,
       createdAt: now,
       updatedAt: now,
     };
 
-    // Remove any applicant-specific fields that shouldn't be on the student
-    delete student.applicantID;
-    delete student.applicant_id;
-    delete student.applicantId;
-    delete student.applicant_number;
-
     // Insert the student
     await Student.create(student);
 
-    // Update section counts
-    if (isIrregularStatus(student.status)) {
-      chosenSection.irregular = Number(chosenSection.irregular ?? 0) + 1;
-    } else {
-      chosenSection.regular = Number(chosenSection.regular ?? 0) + 1;
-    }
-    chosenSection.status = toStatus(chosenSection.regular, chosenSection.irregular, chosenSection.regular_capacity);
+    // Archive the applicant and remove it from the applicants collection
+    const ArchivedApplicant = getIitiDbModel("ArchivedApplicant", "archivedapplicants");
+    const { _id: applicantId, ...applicantData } = applicant;
+    await ArchivedApplicant.create({ ...applicantData, status: "Enrolled", archivedAt: now });
+    await Applicant.deleteOne({ _id: applicant._id });
 
-    // Update or create the section
-    const sectionOps = {
-      updateOne: {
-        filter: {
-          year: chosenSection.year,
-          section: chosenSection.section,
-          semester: chosenSection.semester,
-        },
-        update: {
-          $set: {
-            year: chosenSection.year,
-            section: chosenSection.section,
-            semester: chosenSection.semester,
-            regular: chosenSection.regular,
-            irregular: chosenSection.irregular,
-            regular_capacity: chosenSection.regular_capacity,
-            irregular_capacity: chosenSection.irregular_capacity,
-            total_capacity: chosenSection.total_capacity,
-            status: chosenSection.status,
-          },
-        },
-        upsert: true,
-      },
-    };
-    await Section.bulkWrite([sectionOps], { ordered: false });
+    addStudentToSectionState(chosenSection, student.status);
+    await syncSectionFromStudents(student);
 
-    res.status(200).json({
-      message: "Student enrolled successfully",
-      student,
-    });
+    res.status(200).json({ message: "Student enrolled successfully", student });
   } catch (error) {
     console.error("Error in enrollFromApplicant controller", error);
     res.status(500).json({ message: "Internal server error" });
@@ -596,80 +383,36 @@ export async function enrollFromApplicant(req, res) {
 
 /**
  * Helper: find an applicant by ID from the applicants collection.
- * Returns { applicant, applicantData, studentNumber } or null if not found.
  */
 async function findApplicantForEnrollment(applicantID) {
   const searchConditions = [
-    { applicant_number: applicantID },
-    { applicant_number: Number(applicantID) },
-    { applicantID },
-    { applicant_id: applicantID },
     { applicantId: applicantID },
     { applicantId: Number(applicantID) },
+    { applicantID },
+    { applicant_id: applicantID },
+    { applicant_number: applicantID },
+    { applicant_number: Number(applicantID) },
   ];
-
   if (mongoose.Types.ObjectId.isValid(applicantID)) {
     searchConditions.push({ _id: new mongoose.Types.ObjectId(applicantID) });
   }
-
   const Applicant = getIitiDbModel("Applicant", "applicants");
   const applicant = await Applicant.findOne({ $or: searchConditions }).lean();
-
   if (!applicant) return null;
-
-  const { _id, __v, ...applicantData } = applicant;
   const rawId = String(
-    applicantData.applicant_number ??
-    applicantData.applicantID ??
-    applicantData.applicant_id ??
-    applicantData.applicantId ??
-    ""
+    applicant.applicantId ?? applicant.applicantID ?? applicant.applicant_id ?? applicant.applicant_number ?? ""
   ).trim();
   const studentNumber = rawId.replace(/^A-?/i, "");
-
-  return { applicant, applicantData, studentNumber };
-}
-
-/**
- * Build section groups map from existing section records.
- */
-async function buildSectionGroups() {
-  const existingSections = await Section.find({}).lean();
-  const sectionGroups = new Map();
-  for (const section of existingSections) {
-    const year = normalizeText(section.year);
-    const semester = normalizeSemester(section.semester);
-    const sectionName = normalizeSectionName(section.section);
-    if (!year || !sectionName) continue;
-
-    const key = `${year}::${semester}`;
-    const group = sectionGroups.get(key) || [];
-    group.push({
-      year,
-      semester,
-      section: sectionName,
-      regular: Number(section.regular ?? 0),
-      irregular: Number(section.irregular ?? 0),
-      regular_capacity: Number(section.regular_capacity ?? DEFAULT_REGULAR_CAPACITY),
-      irregular_capacity: Number(section.irregular_capacity ?? DEFAULT_IRREGULAR_CAPACITY),
-      total_capacity: Number(section.total_capacity ?? (DEFAULT_REGULAR_CAPACITY + DEFAULT_IRREGULAR_CAPACITY)),
-    });
-    sectionGroups.set(key, group);
-  }
-  return sectionGroups;
+  return { applicant, studentNumber };
 }
 
 export async function batchEnrollPreview(req, res) {
   try {
     const { applicantIDs } = req.body;
-
     if (!Array.isArray(applicantIDs) || applicantIDs.length === 0) {
       return res.status(400).json({ message: "applicantIDs array is required" });
     }
-
-    // Build section groups (simulating current state)
     const sectionGroups = await buildSectionGroups();
-
     const preview = { placements: [], blocked: [], notFound: [] };
 
     for (const applicantID of applicantIDs) {
@@ -678,41 +421,27 @@ export async function batchEnrollPreview(req, res) {
         preview.notFound.push({ applicantID });
         continue;
       }
+      const { applicant, studentNumber } = found;
 
-      const { applicantData, studentNumber } = found;
-
-      // Check for duplicate student_number
-      const existingStudent = await Student.findOne({ student_number: studentNumber }).lean();
+      const existingStudent = await Student.findOne({ studentNumber }).lean();
       if (existingStudent) {
         preview.blocked.push({
           applicantID,
-          applicant_name: `${String(applicantData.first_name ?? "").trim()} ${String(applicantData.last_name ?? "").trim()}`.trim() || "Unknown",
-          student_number: studentNumber,
+          applicant_name: `${String(applicant.firstName ?? "").trim()} ${String(applicant.lastName ?? "").trim()}`.trim() || "Unknown",
+          studentNumber,
           reason: "student_exists",
         });
         continue;
       }
 
-      // Determine section via auto-sectioning (simulate only — no deletion yet)
-      const tempStudent = {
-        ...applicantData,
-        year: 1,
-        semester: "1st",
-        status: "Block",
-      };
+      const tempStudent = { ...applicant, year: 1, semester: "1st", status: "Block" };
       const chosenSection = chooseSectionForStudent(sectionGroups, tempStudent);
-
-      // Track the simulated count
-      if (isIrregularStatus(tempStudent.status)) {
-        chosenSection.irregular = Number(chosenSection.irregular ?? 0) + 1;
-      } else {
-        chosenSection.regular = Number(chosenSection.regular ?? 0) + 1;
-      }
+      addStudentToSectionState(chosenSection, tempStudent.status);
 
       preview.placements.push({
         applicantID,
-        applicant_name: `${String(applicantData.first_name ?? "").trim()} ${String(applicantData.last_name ?? "").trim()}`.trim() || "Unknown",
-        student_number: studentNumber,
+        applicant_name: `${String(applicant.firstName ?? "").trim()} ${String(applicant.lastName ?? "").trim()}`.trim() || "Unknown",
+        studentNumber,
         assigned_section: chosenSection.section,
         assigned_year: "1",
         assigned_semester: "1st",
@@ -729,14 +458,11 @@ export async function batchEnrollPreview(req, res) {
 export async function batchEnrollFromApplicants(req, res) {
   try {
     const { applicantIDs } = req.body;
-
     if (!Array.isArray(applicantIDs) || applicantIDs.length === 0) {
       return res.status(400).json({ message: "applicantIDs array is required" });
     }
 
-    // Build section groups from current state
     const sectionGroups = await buildSectionGroups();
-
     const results = { enrolled: [], blocked: [], notFound: [] };
 
     for (const applicantID of applicantIDs) {
@@ -747,110 +473,52 @@ export async function batchEnrollFromApplicants(req, res) {
           continue;
         }
 
-        const { applicantData, studentNumber } = found;
+        const { applicant, studentNumber } = found;
 
-        // Check for duplicate student_number
-        const existingStudent = await Student.findOne({ student_number: studentNumber }).lean();
+        const existingStudent = await Student.findOne({ studentNumber }).lean();
         if (existingStudent) {
           results.blocked.push({
             applicantID,
-            applicant_name: `${String(applicantData.first_name ?? "").trim()} ${String(applicantData.last_name ?? "").trim()}`.trim() || "Unknown",
-            student_number: studentNumber,
+            applicant_name: `${String(applicant.firstName ?? "").trim()} ${String(applicant.lastName ?? "").trim()}`.trim() || "Unknown",
+            studentNumber,
             reason: "student_exists",
           });
           continue;
         }
 
-        // Determine section via auto-sectioning (before deletion)
-        const tempStudent = {
-          ...applicantData,
-          year: 1,
-          semester: "1st",
-          status: "Block",
-        };
+        const tempStudent = { ...applicant, year: 1, semester: "1st", status: "Block" };
         const chosenSection = chooseSectionForStudent(sectionGroups, tempStudent);
 
-        // Delete from applicants collection
-        const searchConditions = [
-          { applicant_number: applicantID },
-          { applicant_number: Number(applicantID) },
-          { applicantID },
-          { applicant_id: applicantID },
-          { applicantId: applicantID },
-          { applicantId: Number(applicantID) },
-        ];
-
-        if (mongoose.Types.ObjectId.isValid(applicantID)) {
-          searchConditions.push({ _id: new mongoose.Types.ObjectId(applicantID) });
-        }
-
-        const Applicant = getIitiDbModel("Applicant", "applicants");
-        const deleted = await Applicant.findOneAndDelete({ $or: searchConditions }).lean();
-
-        if (!deleted) {
-          results.notFound.push({ applicantID });
-          continue;
-        }
-
-        // Build and create the student with auto-assigned section
+        // Build the student object — normalize all fields from applicant to camelCase
+        const normalizedApplicant = normalizeImportedStudent(applicant);
         const now = new Date();
         const student = {
-          ...applicantData,
-          student_number: studentNumber,
+          ...normalizedApplicant,
+          studentNumber,
           status: "Block",
-          year: 1,
+          year: "1",
           semester: "1st",
           section: chosenSection.section,
           createdAt: now,
           updatedAt: now,
         };
 
-        delete student.applicantID;
-        delete student.applicant_id;
-        delete student.applicantId;
-        delete student.applicant_number;
-
         await Student.create(student);
 
-        // Update section counts
-        if (isIrregularStatus(student.status)) {
-          chosenSection.irregular = Number(chosenSection.irregular ?? 0) + 1;
-        } else {
-          chosenSection.regular = Number(chosenSection.regular ?? 0) + 1;
-        }
+        // Archive the applicant and remove it from the applicants collection
+        const Applicant = getIitiDbModel("Applicant", "applicants");
+        const ArchivedApplicant = getIitiDbModel("ArchivedApplicant", "archivedapplicants");
+        const { _id: applicantObjectId, ...applicantData } = applicant;
+        await ArchivedApplicant.create({ ...applicantData, status: "Enrolled", archivedAt: now });
+        await Applicant.deleteOne({ _id: applicant._id });
 
-        chosenSection.status = toStatus(chosenSection.regular, chosenSection.irregular, chosenSection.regular_capacity);
-
-        // Upsert the section
-        const sectionOps = {
-          updateOne: {
-            filter: {
-              year: chosenSection.year,
-              section: chosenSection.section,
-              semester: chosenSection.semester,
-            },
-            update: {
-              $set: {
-                year: chosenSection.year,
-                section: chosenSection.section,
-                semester: chosenSection.semester,
-                regular: chosenSection.regular,
-                irregular: chosenSection.irregular,
-                regular_capacity: chosenSection.regular_capacity,
-                irregular_capacity: chosenSection.irregular_capacity,
-                total_capacity: chosenSection.total_capacity,
-                status: chosenSection.status,
-              },
-            },
-            upsert: true,
-          },
-        };
-        await Section.bulkWrite([sectionOps], { ordered: false });
+        addStudentToSectionState(chosenSection, student.status);
+        await syncSectionFromStudents(student);
 
         results.enrolled.push({
           applicantID,
-          applicant_name: `${String(applicantData.first_name ?? "").trim()} ${String(applicantData.last_name ?? "").trim()}`.trim() || "Unknown",
-          student_number: studentNumber,
+          applicant_name: `${String(applicant.firstName ?? "").trim()} ${String(applicant.lastName ?? "").trim()}`.trim() || "Unknown",
+          studentNumber,
           assigned_section: chosenSection.section,
         });
       } catch (err) {
@@ -859,6 +527,7 @@ export async function batchEnrollFromApplicants(req, res) {
           applicantID,
           applicant_name: "Unknown",
           reason: "internal_error",
+          error: err instanceof Error ? err.message : String(err ?? "Unknown error"),
         });
       }
     }
@@ -873,54 +542,82 @@ export async function batchEnrollFromApplicants(req, res) {
   }
 }
 
-export async function deleteStudent(req, res) {
-  try {
-    const deletedStudent = await Student.findByIdAndDelete(req.params.id);
-    if (!deletedStudent) return res.status(404).json({ message: "Student not found" });
-    res.status(200).json({ message: "Student deleted successfully!" });
-  } catch (error) {
-    console.error("Error in deleteStudent controller", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-}
+// ─── Import Logic ────────────────────────────────────────────────────────────
 
 function normalizeImportedStudent(raw = {}) {
-  const firstName = String(raw.first_name ?? raw.firstName ?? "").trim();
-  const lastName = String(raw.last_name ?? raw.lastName ?? "").trim();
+  const firstName = String(raw.firstName ?? raw.first_name ?? "").trim();
+  const lastName = String(raw.lastName ?? raw.last_name ?? "").trim();
+  const middleName = String(raw.middleName ?? raw.middle_name ?? "").trim();
   const name = String(raw.name ?? `${firstName} ${lastName}`.trim()).trim();
 
   return {
-    student_number: String(raw.student_number ?? raw.studentNumber ?? "").trim(),
-    first_name: firstName,
-    last_name: lastName,
+    studentNumber: String(raw.studentNumber ?? raw.student_number ?? "").trim(),
+    firstName,
+    lastName,
+    middleName,
     name,
     year: raw.year != null && raw.year !== "" ? String(raw.year).trim() : "",
     semester: normalizeSemester(raw.semester),
     status: normalizeStatus(raw.status),
+    section: String(raw.section ?? "").trim(),
+    email: String(raw.email ?? "").trim(),
+    password: String(raw.password ?? "").trim(),
+    schoolYear: String(raw.schoolYear ?? raw.school_year ?? "").trim(),
+    birthDate: String(raw.birthDate ?? raw.birth_date ?? "").trim(),
+    contactNumber: String(raw.contactNumber ?? raw.contact_number ?? "").trim(),
+    gender: String(raw.gender ?? "").trim(),
+    civilStatus: String(raw.civilStatus ?? "").trim(),
+    placeOfBirth: String(raw.placeOfBirth ?? "").trim(),
+    suffix: String(raw.suffix ?? "").trim(),
+    spouseName: String(raw.spouseName ?? "").trim(),
+    fatherName: String(raw.fatherName ?? raw.father_name ?? "").trim(),
+    fatherContact: String(raw.fatherContact ?? raw.father_contact ?? "").trim(),
+    motherName: String(raw.motherName ?? raw.mother_name ?? "").trim(),
+    motherContact: String(raw.motherContact ?? raw.mother_contact ?? "").trim(),
+    course: String(raw.course ?? "").trim(),
+    applicantType: String(raw.applicantType ?? "").trim(),
+    permanentHouse: String(raw.permanentHouse ?? "").trim(),
+    permanentStreet: String(raw.permanentStreet ?? "").trim(),
+    permanentBarangay: String(raw.permanentBarangay ?? "").trim(),
+    permanentCity: String(raw.permanentCity ?? "").trim(),
+    permanentProvince: String(raw.permanentProvince ?? "").trim(),
+    permanentZip: String(raw.permanentZip ?? "").trim(),
+    presentHouse: String(raw.presentHouse ?? "").trim(),
+    presentStreet: String(raw.presentStreet ?? "").trim(),
+    presentBarangay: String(raw.presentBarangay ?? "").trim(),
+    presentCity: String(raw.presentCity ?? "").trim(),
+    presentProvince: String(raw.presentProvince ?? "").trim(),
+    presentZip: String(raw.presentZip ?? "").trim(),
+    elementarySchool: String(raw.elementarySchool ?? raw.elementary_school ?? "").trim(),
+    elementaryAddress: String(raw.elementaryAddress ?? raw.elementary_address ?? "").trim(),
+    elementaryYear: String(raw.elementaryYear ?? "").trim(),
+    juniorHighSchool: String(raw.juniorHighSchool ?? raw.junior_high_school ?? "").trim(),
+    juniorHighAddress: String(raw.juniorHighAddress ?? raw.junior_high_address ?? "").trim(),
+    juniorHighYear: String(raw.juniorHighYear ?? "").trim(),
+    seniorHighSchool: String(raw.seniorHighSchool ?? raw.senior_high_school ?? "").trim(),
+    seniorHighAddress: String(raw.seniorHighAddress ?? raw.senior_high_address ?? "").trim(),
+    seniorHighYear: String(raw.seniorHighYear ?? "").trim(),
+    collegeSchool: String(raw.collegeSchool ?? raw.college_school ?? "").trim(),
+    collegeAddress: String(raw.collegeAddress ?? raw.college_address ?? "").trim(),
+    collegeYear: String(raw.collegeYear ?? "").trim(),
+    disability: raw.disability === true || raw.disability === "true",
+    indigenous: raw.indigenous === true || raw.indigenous === "true",
+    soloParent: raw.soloParent === true || raw.soloParent === "true",
+    fourPs: raw.fourPs === true || raw.fourPs === "true",
   };
 }
 
 export async function importStudents(req, res) {
   try {
     const rows = Array.isArray(req.body?.students) ? req.body.students : [];
-    const importType = String(req.body?.importType ?? "student").toLowerCase(); // "student" or "section"
-    
+    const importType = String(req.body?.importType ?? "student").toLowerCase();
+
     console.log(`[Import] Starting ${importType} import with ${rows.length} rows`);
-    
-    if (!rows.length) {
-      return res.status(400).json({ message: "students array is required" });
-    }
 
-    const normalized = rows
-      .map(normalizeImportedStudent)
-      .filter((student) => student.student_number);
+    if (!rows.length) return res.status(400).json({ message: "students array is required" });
 
-    if (!normalized.length) {
-      return res.status(400).json({ message: "No valid student rows found" });
-    }
-
-    console.log(`[Import] Normalized to ${normalized.length} valid students`);
-    console.log(`[Import] Student numbers to check:`, normalized.map((s) => s.student_number));
+    const normalized = rows.map(normalizeImportedStudent).filter((s) => s.studentNumber);
+    if (!normalized.length) return res.status(400).json({ message: "No valid student rows found" });
 
     const existingSections = await Section.find({}).lean();
     const sectionGroups = new Map();
@@ -928,108 +625,64 @@ export async function importStudents(req, res) {
       const year = normalizeText(section.year);
       const semester = normalizeSemester(section.semester);
       const sectionName = normalizeSectionName(section.section);
-      if (!year || !sectionName) {
-        continue;
-      }
-
+      if (!year || !sectionName) continue;
       const key = `${year}::${semester}`;
       const group = sectionGroups.get(key) || [];
       group.push({
-        year,
-        semester,
-        section: sectionName,
-        regular: Number(section.regular ?? 0),
-        irregular: Number(section.irregular ?? 0),
-        regular_capacity: Number(section.regular_capacity ?? DEFAULT_REGULAR_CAPACITY),
-        irregular_capacity: Number(section.irregular_capacity ?? DEFAULT_IRREGULAR_CAPACITY),
-        total_capacity: Number(section.total_capacity ?? (DEFAULT_REGULAR_CAPACITY + DEFAULT_IRREGULAR_CAPACITY)),
+        year, semester, section: sectionName,
+        blockCount: Number(section.blockCount ?? section.regular ?? 0),
+        irregularCount: Number(section.irregularCount ?? section.irregular ?? 0),
+        blockCapacity: Number(section.blockCapacity ?? section.regularCapacity ?? DEFAULT_TOTAL_CAPACITY * 0.9),
+        irregularCapacity: Number(section.irregularCapacity ?? DEFAULT_TOTAL_CAPACITY * 0.1),
+        totalCapacity: Number(section.totalCapacity ?? DEFAULT_TOTAL_CAPACITY),
       });
       sectionGroups.set(key, group);
     }
 
-    // Get all existing students with these student numbers
     const existingStudents = await Student.find(
-      { student_number: { $in: normalized.map((s) => String(s.student_number).trim()) } },
-      { student_number: 1, first_name: 1, last_name: 1 }
+      { studentNumber: { $in: normalized.map((s) => String(s.studentNumber).trim()) } },
+      { studentNumber: 1, firstName: 1, lastName: 1 }
     ).lean();
 
-    console.log(`[Import] Found ${existingStudents.length} existing students in database`);
-    console.log(`[Import] Existing student numbers:`, existingStudents.map((s) => s.student_number));
+    const existingStudentNumbers = new Set(existingStudents.map((s) => String(s.studentNumber).trim()));
 
-    // Create a set with normalized (string) student numbers for comparison
-    const existingStudentNumbers = new Set(
-      existingStudents.map((s) => String(s.student_number).trim())
-    );
-
-    // For "student" import type: block entire import if any student exists
     if (importType === "student") {
-      const duplicates = normalized.filter((s) => 
-        existingStudentNumbers.has(String(s.student_number).trim())
-      );
-      
-      console.log(`[Import] Student import - found ${duplicates.length} duplicates`);
-      
+      const duplicates = normalized.filter((s) => existingStudentNumbers.has(String(s.studentNumber).trim()));
       if (duplicates.length > 0) {
-        console.log(`[Import] Blocking student import due to duplicates`);
         return res.status(409).json({
           message: "Import Blocked: Student Number Already Exist",
           blockReason: "student_exists",
-          duplicates: duplicates.map((s) => ({
-            student_number: s.student_number,
-            first_name: s.first_name,
-            last_name: s.last_name,
-          })),
+          duplicates: duplicates.map((s) => ({ studentNumber: s.studentNumber, firstName: s.firstName, lastName: s.lastName })),
         });
       }
     }
 
-    const missingYearStudent = normalized.find((student) => !normalizeText(student.year));
+    const missingYearStudent = normalized.find((s) => !normalizeText(s.year));
     if (missingYearStudent) {
-      return res.status(400).json({
-        message: `Student ${missingYearStudent.student_number} is missing a year value`,
-      });
+      return res.status(400).json({ message: `Student ${missingYearStudent.studentNumber} is missing a year value` });
     }
 
     const toImport = normalized
-      .filter((s) => !existingStudentNumbers.has(String(s.student_number).trim()))
+      .filter((s) => !existingStudentNumbers.has(String(s.studentNumber).trim()))
       .map((student) => {
         const chosenSection = chooseSectionForStudent(sectionGroups, student);
-        if (isIrregularStatus(student.status)) {
-          chosenSection.irregular = Number(chosenSection.irregular ?? 0) + 1;
-        } else {
-          chosenSection.regular = Number(chosenSection.regular ?? 0) + 1;
-        }
-
-        chosenSection.status = toStatus(chosenSection.regular, chosenSection.irregular, chosenSection.regular_capacity);
-
-        return {
-          ...student,
-          section: chosenSection.section,
-        };
+        addStudentToSectionState(chosenSection, student.status);
+        return { ...student, section: chosenSection.section };
       });
 
-    const blocked = normalized.filter((s) =>
-      existingStudentNumbers.has(String(s.student_number).trim())
-    );
-
-    console.log(`[Import] Section import - ${toImport.length} to import, ${blocked.length} blocked`);
+    const blocked = normalized.filter((s) => existingStudentNumbers.has(String(s.studentNumber).trim()));
 
     if (importType === "section" && blocked.length > 0 && toImport.length === 0) {
-      console.log(`[Import] Blocking section import - all students exist`);
       return res.status(409).json({
         message: "Import Blocked: All students in this section already exist",
         blockReason: "all_students_exist",
-        blocked: blocked.map((s) => ({
-          student_number: s.student_number,
-          first_name: s.first_name,
-          last_name: s.last_name,
-        })),
+        blocked: blocked.map((s) => ({ studentNumber: s.studentNumber, firstName: s.firstName, lastName: s.lastName })),
       });
     }
 
     const operations = toImport.map((student) => ({
       updateOne: {
-        filter: { student_number: student.student_number },
+        filter: { studentNumber: student.studentNumber },
         update: { $set: student },
         upsert: true,
       },
@@ -1038,7 +691,6 @@ export async function importStudents(req, res) {
     let result = { upsertedCount: 0, modifiedCount: 0, matchedCount: 0 };
     if (operations.length > 0) {
       result = await Student.bulkWrite(operations, { ordered: false });
-      console.log(`[Import] Bulk write result - upserted: ${result.upsertedCount}, modified: ${result.modifiedCount}`);
     }
 
     if (toImport.length > 0) {
@@ -1047,22 +699,14 @@ export async function importStudents(req, res) {
         for (const section of sections) {
           sectionOps.push({
             updateOne: {
-              filter: {
-                year: section.year,
-                section: section.section,
-                semester: section.semester,
-              },
+              filter: { year: section.year, section: section.section, semester: section.semester },
               update: {
                 $set: {
-                  year: section.year,
-                  section: section.section,
-                  semester: section.semester,
-                  regular: section.regular,
-                  irregular: section.irregular,
-                  regular_capacity: section.regular_capacity,
-                  irregular_capacity: section.irregular_capacity,
-                  total_capacity: section.total_capacity,
-                  status: toStatus(section.regular, section.irregular, section.regular_capacity),
+                  year: section.year, section: section.section, semester: section.semester,
+                  blockCount: section.blockCount, irregularCount: section.irregularCount,
+                  blockCapacity: section.blockCapacity, irregularCapacity: section.irregularCapacity,
+                  totalCapacity: section.totalCapacity,
+                  status: getSectionStatus(section.blockCount, section.irregularCount, section.totalCapacity),
                 },
               },
               upsert: true,
@@ -1070,21 +714,14 @@ export async function importStudents(req, res) {
           });
         }
       }
-
-      if (sectionOps.length > 0) {
-        await Section.bulkWrite(sectionOps, { ordered: false });
-      }
+      if (sectionOps.length > 0) await Section.bulkWrite(sectionOps, { ordered: false });
     }
 
     res.status(200).json({
       message: "Students imported successfully",
       received: rows.length,
       imported: toImport.length,
-      blocked: blocked.map((s) => ({
-        student_number: s.student_number,
-        first_name: s.first_name,
-        last_name: s.last_name,
-      })),
+      blocked: blocked.map((s) => ({ studentNumber: s.studentNumber, firstName: s.firstName, lastName: s.lastName })),
       upserted: result.upsertedCount ?? 0,
       modified: result.modifiedCount ?? 0,
       matched: result.matchedCount ?? 0,

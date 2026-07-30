@@ -3,8 +3,10 @@ import mongoose from 'mongoose';
 import dns from 'node:dns/promises';
 import Student from '../models/Student.js';
 import Section from '../models/Section.js';
+import { getSectionCapacities, getSectionStatus } from '../services/sectionService.js';
 
 dotenv.config();
+
 dns.setServers(['1.1.1.1', '1.0.0.1']);
 
 function normalizeText(value) {
@@ -23,37 +25,19 @@ function normalizeStatus(value) {
 function sectionSort(left, right) {
   const leftCreatedAt = new Date(left?.createdAt ?? 0).getTime();
   const rightCreatedAt = new Date(right?.createdAt ?? 0).getTime();
-
-  if (leftCreatedAt !== rightCreatedAt) {
-    return leftCreatedAt - rightCreatedAt;
-  }
-
+  if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
   return normalizeText(left?.section).localeCompare(normalizeText(right?.section), undefined, {
-    numeric: true,
-    sensitivity: 'base',
+    numeric: true, sensitivity: 'base',
   });
 }
 
 function studentSort(left, right) {
   const leftCreatedAt = new Date(left?.createdAt ?? 0).getTime();
   const rightCreatedAt = new Date(right?.createdAt ?? 0).getTime();
-
-  if (leftCreatedAt !== rightCreatedAt) {
-    return leftCreatedAt - rightCreatedAt;
-  }
-
-  return String(left?.student_number ?? '').localeCompare(String(right?.student_number ?? ''), undefined, {
-    numeric: true,
-    sensitivity: 'base',
+  if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+  return String(left?.studentNumber ?? '').localeCompare(String(right?.studentNumber ?? ''), undefined, {
+    numeric: true, sensitivity: 'base',
   });
-}
-
-function toStatus(regular, regularCapacity) {
-  const regularCount = Number(regular || 0);
-  const capacity = Number(regularCapacity || 0);
-  if (regularCount < capacity) return 'Available';
-  if (regularCount === capacity) return 'Full';
-  return 'Overloaded';
 }
 
 async function main() {
@@ -75,7 +59,6 @@ async function main() {
       const semester = normalizeSemester(section.semester);
       const sectionName = normalizeText(section.section).toUpperCase();
       if (!year || !sectionName) continue;
-
       const key = `${year}::${semester}`;
       const group = sectionsByGroup.get(key) || [];
       group.push(section);
@@ -88,7 +71,6 @@ async function main() {
       const semester = normalizeSemester(student.semester);
       const sectionName = normalizeText(student.section).toUpperCase();
       if (!year || !sectionName) continue;
-
       const key = `${year}::${semester}`;
       const group = studentsByGroup.get(key) || [];
       group.push(student);
@@ -103,14 +85,14 @@ async function main() {
       if (!orderedSections.length) continue;
 
       const groupStudents = (studentsByGroup.get(groupKey) || []).sort(studentSort);
-      const regularStudents = groupStudents.filter((student) => {
+      const blockStudents = groupStudents.filter((student) => {
         const status = normalizeStatus(student.status);
-        return status === 'enrolled' || status === 'regular';
+        return status !== 'irregular';
       });
       const irregularStudents = groupStudents.filter((student) => normalizeStatus(student.status) === 'irregular');
 
       const assignedBySection = new Map(
-        orderedSections.map((section) => [String(section.section).toUpperCase(), { regular: [], irregular: [] }])
+        orderedSections.map((section) => [String(section.section).toUpperCase(), { block: [], irregular: [] }])
       );
 
       const assignBucket = (bucketStudents, bucketKey) => {
@@ -119,18 +101,15 @@ async function main() {
           while (sectionIndex < orderedSections.length) {
             const section = orderedSections[sectionIndex];
             const sectionName = String(section.section).toUpperCase();
-            const capacityKey = bucketKey === 'regular' ? 'regular_capacity' : 'irregular_capacity';
+            const capacityKey = bucketKey === 'block' ? 'blockCapacity' : 'irregularCapacity';
             const currentCount = assignedBySection.get(sectionName)[bucketKey].length;
             const capacity = Number(section[capacityKey] ?? 0);
-
             if (currentCount < capacity) {
               assignedBySection.get(sectionName)[bucketKey].push(student);
               break;
             }
-
             sectionIndex += 1;
           }
-
           if (sectionIndex >= orderedSections.length) {
             const fallbackSection = orderedSections[orderedSections.length - 1];
             const fallbackName = String(fallbackSection.section).toUpperCase();
@@ -139,32 +118,31 @@ async function main() {
         }
       };
 
-      assignBucket(regularStudents, 'regular');
+      assignBucket(blockStudents, 'block');
       assignBucket(irregularStudents, 'irregular');
 
       for (const section of orderedSections) {
         const sectionName = String(section.section).toUpperCase();
-        const assigned = assignedBySection.get(sectionName) || { regular: [], irregular: [] };
-        const regularCapacity = Number(section.regular_capacity ?? 45);
-        const irregularCapacity = Number(section.irregular_capacity ?? 5);
+        const assigned = assignedBySection.get(sectionName) || { block: [], irregular: [] };
+        const capacities = getSectionCapacities(section.totalCapacity);
 
         sectionOps.push({
           updateOne: {
             filter: { _id: section._id },
             update: {
               $set: {
-                regular: assigned.regular.length,
-                irregular: assigned.irregular.length,
-                regular_capacity: regularCapacity,
-                irregular_capacity: irregularCapacity,
-                total_capacity: Number(section.total_capacity ?? (regularCapacity + irregularCapacity)),
-                status: toStatus(assigned.regular.length, regularCapacity),
+                blockCount: assigned.block.length,
+                irregularCount: assigned.irregular.length,
+                blockCapacity: capacities.blockCapacity,
+                irregularCapacity: capacities.irregularCapacity,
+                totalCapacity: capacities.totalCapacity,
+                status: getSectionStatus(assigned.block.length, assigned.irregular.length, capacities.totalCapacity),
               },
             },
           },
         });
 
-        for (const student of assigned.regular) {
+        for (const student of assigned.block) {
           if (normalizeText(student.section).toUpperCase() !== sectionName) {
             studentOps.push({
               updateOne: {

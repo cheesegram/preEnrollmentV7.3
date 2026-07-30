@@ -37,9 +37,9 @@ function getStudentRows(students) {
   return [
     STUDENT_HEADERS,
     ...students.map((student) => [
-      String(student.student_number ?? ""),
-      String(student.first_name ?? ""),
-      String(student.last_name ?? ""),
+      String(student.studentNumber ?? ""),
+      String(student.firstName ?? ""),
+      String(student.lastName ?? ""),
       String(student.year ?? ""),
       String(student.section ?? ""),
       String(student.semester ?? ""),
@@ -103,14 +103,14 @@ export async function parseStudentTemplateFile(file) {
   const parsedStudents = rows
     .slice(1)
     .map((row) => ({
-      student_number: String(getCell(row, "student number")).trim(),
-      first_name: String(getCell(row, "first name")).trim(),
-      last_name: String(getCell(row, "last name")).trim(),
+      studentNumber: String(getCell(row, "student number")).trim(),
+      firstName: String(getCell(row, "first name")).trim(),
+      lastName: String(getCell(row, "last name")).trim(),
       year: String(getCell(row, "year")).trim(),
       semester: String(getCell(row, "semester")).trim(),
       status: String(getCell(row, "status")).trim() || "Enrolled",
     }))
-    .filter((student) => student.student_number);
+    .filter((student) => student.studentNumber);
 
   if (!parsedStudents.length) throw new Error("No student rows found in file");
   return parsedStudents;

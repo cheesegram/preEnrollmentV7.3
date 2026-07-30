@@ -5,34 +5,119 @@ import Pagination from "./ui/Pagination";
 
 const FIELD_LABELS = {
   applicantID: "Applicant ID",
-  applicant_number: "Applicant Number",
+  applicantId: "Applicant ID",
   applicant_name: "Applicant Name",
-  student_number: "Student Number",
-  name: "Complete Name",
-  first_name: "First Name",
-  last_name: "Last Name",
+  studentNumber: "Student Number",
+  firstName: "First Name",
+  lastName: "Last Name",
+  middleName: "Middle Name",
   section: "Section",
   year: "Year",
   semester: "Semester",
   status: "Status",
-  title: "Title",
-  content: "Content",
+  email: "Email",
+  password: "Password",
+  schoolYear: "School Year",
+  birthDate: "Birth Date",
+  contactNumber: "Contact Number",
+  gender: "Gender",
+  civilStatus: "Civil Status",
+  placeOfBirth: "Place of Birth",
+  suffix: "Suffix",
+  spouseName: "Spouse Name",
+  fatherName: "Father Name",
+  fatherContact: "Father Contact",
+  motherName: "Mother Name",
+  motherContact: "Mother Contact",
+  course: "Course",
+  applicantType: "Applicant Type",
+  permanentHouse: "Permanent House",
+  permanentStreet: "Permanent Street",
+  permanentBarangay: "Permanent Barangay",
+  permanentCity: "Permanent City",
+  permanentProvince: "Permanent Province",
+  permanentZip: "Permanent Zip",
+  presentHouse: "Present House",
+  presentStreet: "Present Street",
+  presentBarangay: "Present Barangay",
+  presentCity: "Present City",
+  presentProvince: "Present Province",
+  presentZip: "Present Zip",
+  elementarySchool: "Elementary School",
+  elementaryAddress: "Elementary Address",
+  elementaryYear: "Elementary Year",
+  juniorHighSchool: "Junior High School",
+  juniorHighAddress: "Junior High Address",
+  juniorHighYear: "Junior High Year",
+  seniorHighSchool: "Senior High School",
+  seniorHighAddress: "Senior High Address",
+  seniorHighYear: "Senior High Year",
+  collegeSchool: "College School",
+  collegeAddress: "College Address",
+  collegeYear: "College Year",
+  disability: "Disability",
+  indigenous: "Indigenous",
+  soloParent: "Solo Parent",
+  fourPs: "4Ps",
   createdAt: "Date Created",
   updatedAt: "Last Updated",
 };
 
 const FIELD_ORDER = [
-  "student_number",
-  "applicant_number",
+  "studentNumber",
+  "applicantId",
   "applicantID",
-  "name",
   "applicant_name",
-  "first_name",
-  "last_name",
+  "firstName",
+  "lastName",
+  "middleName",
   "year",
   "section",
   "semester",
   "status",
+  "email",
+  "schoolYear",
+  "birthDate",
+  "contactNumber",
+  "gender",
+  "civilStatus",
+  "placeOfBirth",
+  "suffix",
+  "spouseName",
+  "fatherName",
+  "fatherContact",
+  "motherName",
+  "motherContact",
+  "course",
+  "applicantType",
+  "permanentHouse",
+  "permanentStreet",
+  "permanentBarangay",
+  "permanentCity",
+  "permanentProvince",
+  "permanentZip",
+  "presentHouse",
+  "presentStreet",
+  "presentBarangay",
+  "presentCity",
+  "presentProvince",
+  "presentZip",
+  "elementarySchool",
+  "elementaryAddress",
+  "elementaryYear",
+  "juniorHighSchool",
+  "juniorHighAddress",
+  "juniorHighYear",
+  "seniorHighSchool",
+  "seniorHighAddress",
+  "seniorHighYear",
+  "collegeSchool",
+  "collegeAddress",
+  "collegeYear",
+  "disability",
+  "indigenous",
+  "soloParent",
+  "fourPs",
   "createdAt",
   "updatedAt",
 ];
@@ -135,13 +220,11 @@ function StudentsTable({
       fourth: "4th",
       "fourth year": "4th",
     };
-
     return map[raw] || null;
   };
 
   const getSemesterIndex = (semester) => {
     const raw = String(semester ?? "").trim().toLowerCase();
-
     if (["1", "1st", "first", "first semester", "1st semester"].includes(raw)) return 0;
     if (["2", "2nd", "second", "second semester", "2nd semester"].includes(raw)) return 1;
     return -1;
@@ -158,7 +241,7 @@ function StudentsTable({
       const isIrregular = String(student?.status ?? "").trim().toLowerCase() === "irregular";
 
       if (isIrregular) {
-        const curriculumId = String(student?.student_number ?? "").trim();
+        const curriculumId = String(student?.studentNumber ?? "").trim();
         if (!curriculumId) {
           setSubjectError("Student number is required to load this view.");
           return;
@@ -277,7 +360,7 @@ function StudentsTable({
             {paginatedStudents.length > 0 ? (
               paginatedStudents.map((student, index) => (
                 <tr
-                  key={student._id || student.student_number || student.applicantID || index}
+                  key={student._id || student.studentNumber || student.applicantID || index}
                   tabIndex={0}
                   onClick={() => setDetailStudent(student)}
                   onKeyDown={(event) => {
@@ -287,18 +370,18 @@ function StudentsTable({
                     }
                   }}
                   aria-label={`View complete data for ${isPendingView
-                    ? student.applicant_name || student.applicant_number || student.applicantID || "applicant"
-                    : `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || student.student_number || "student"
+                    ? student.applicant_name || student.applicantId || student.applicantID || "applicant"
+                    : `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim() || student.studentNumber || "student"
                     }`}
                   className="cursor-pointer transition-colors hover:bg-emerald-50/60 focus-visible:bg-emerald-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
                 >
                   <td className="px-5 py-4 font-medium text-gray-900">
-                    {isPendingView ? student.applicantID ?? student.applicant_number ?? "—" : student.student_number ?? "—"}
+                    {isPendingView ? student.applicantID ?? student.applicantId ?? "—" : student.studentNumber ?? "—"}
                   </td>
                   <td className="px-5 py-4 text-gray-800">
                     {isPendingView
-                      ? (student.applicant_name ?? `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim()) || "—"
-                      : `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || student.name || "—"}
+                      ? (student.applicant_name ?? `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim()) || "—"
+                      : `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim() || "—"}
                   </td>
                   {!isPendingView && <td className="px-5 py-4 text-gray-600">{student.section || "—"}</td>}
                   {!isPendingView && <td className="px-5 py-4 text-gray-600">{student.year || "—"}</td>}
@@ -312,7 +395,7 @@ function StudentsTable({
                           handleOpenStudentSubjects(student, "schedule");
                         }}
                         className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2E522A] focus:outline-none focus:ring-2 focus:ring-[#2E522A]/50"
-                        aria-label={`View schedule for ${student.first_name ?? "student"}`}
+                        aria-label={`View schedule for ${student.firstName ?? "student"}`}
                       >
                         <i className="fa-solid fa-calendar-days" />
                       </button>
@@ -327,7 +410,7 @@ function StudentsTable({
                           handleOpenStudentSubjects(student, "curriculum");
                         }}
                         className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2E522A] focus:outline-none focus:ring-2 focus:ring-[#2E522A]/50"
-                        aria-label={`View curriculum for ${student.first_name ?? "student"}`}
+                        aria-label={`View curriculum for ${student.firstName ?? "student"}`}
                       >
                         <i className="fa-solid fa-book-open" />
                       </button>
@@ -392,12 +475,12 @@ function StudentsTable({
                   <h3 className="mt-1 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
                     {isPendingView
                       ? detailStudent.applicant_name || "Applicant data"
-                      : `${detailStudent.first_name ?? ""} ${detailStudent.last_name ?? ""}`.trim() || "Student data"}
+                      : `${detailStudent.firstName ?? ""} ${detailStudent.lastName ?? ""}`.trim() || "Student data"}
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
                     {isPendingView
-                      ? detailStudent.applicant_number ?? detailStudent.applicantID ?? "No applicant number"
-                      : detailStudent.student_number ?? "No student number"}
+                      ? detailStudent.applicantId ?? detailStudent.applicantID ?? "No applicant number"
+                      : detailStudent.studentNumber ?? "No student number"}
                   </p>
                 </div>
                 <button
@@ -445,8 +528,8 @@ function StudentsTable({
                     {selectedSubjectView === "schedule" ? "Class Schedule" : "Class Curriculum"}
                   </h3>
                   <p className="mt-1 text-sm font-medium text-gray-500">
-                    {selectedStudent.first_name} {selectedStudent.last_name} <span className="mx-1">•</span>{" "}
-                    {selectedStudent.student_number} <span className="mx-1">•</span> {selectedStudent.section}
+                    {selectedStudent.firstName} {selectedStudent.lastName} <span className="mx-1">•</span>{" "}
+                    {selectedStudent.studentNumber} <span className="mx-1">•</span> {selectedStudent.section}
                   </p>
                 </div>
                 <button

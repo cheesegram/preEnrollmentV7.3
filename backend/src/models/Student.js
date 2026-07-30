@@ -1,29 +1,21 @@
 import mongoose from "mongoose";
 
-// 1st step: You need to create a schema
-// 2nd step: You would create a model based off of that schema
-
 const studentSchema = new mongoose.Schema(
   {
-    // basic identifying fields; adjust as needed for your application
-    student_number: {
+    studentNumber: {
       type: String,
       required: true,
       unique: true,
     },
-    name: {
+    firstName: {
       type: String,
       trim: true,
     },
-    first_name: {
+    lastName: {
       type: String,
       trim: true,
     },
-    last_name: {
-      type: String,
-      trim: true,
-    },
-    middle_name: {
+    middleName: {
       type: String,
       trim: true,
     },
@@ -40,16 +32,15 @@ const studentSchema = new mongoose.Schema(
       default: "Enrolled",
     },
     year: {
-      type: Number,
-      min: 1,
-      max: 4,
-    },
-    // personal information fields
-    birth_date: {
       type: String,
       trim: true,
     },
-    contact_number: {
+    // personal information fields
+    birthDate: {
+      type: String,
+      trim: true,
+    },
+    contactNumber: {
       type: String,
       trim: true,
     },
@@ -57,33 +48,59 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    permanent_address: {
+    gender: {
       type: String,
       trim: true,
     },
-    present_address: {
+    civilStatus: {
       type: String,
       trim: true,
     },
+    placeOfBirth: {
+      type: String,
+      trim: true,
+    },
+    suffix: {
+      type: String,
+      trim: true,
+    },
+    spouseName: {
+      type: String,
+      trim: true,
+    },
+    // address fields (permanent)
+    permanentHouse: { type: String, trim: true },
+    permanentStreet: { type: String, trim: true },
+    permanentBarangay: { type: String, trim: true },
+    permanentCity: { type: String, trim: true },
+    permanentProvince: { type: String, trim: true },
+    permanentZip: { type: String, trim: true },
+    // address fields (present)
+    presentHouse: { type: String, trim: true },
+    presentStreet: { type: String, trim: true },
+    presentBarangay: { type: String, trim: true },
+    presentCity: { type: String, trim: true },
+    presentProvince: { type: String, trim: true },
+    presentZip: { type: String, trim: true },
     // family information fields
-    father_name: {
+    fatherName: {
       type: String,
       trim: true,
     },
-    father_contact: {
+    fatherContact: {
       type: String,
       trim: true,
     },
-    mother_name: {
+    motherName: {
       type: String,
       trim: true,
     },
-    mother_contact: {
+    motherContact: {
       type: String,
       trim: true,
     },
     // school information fields
-    school_year: {
+    schoolYear: {
       type: String,
       trim: true,
     },
@@ -91,35 +108,59 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    elementary_school: {
+    applicantType: {
       type: String,
       trim: true,
     },
-    elementary_address: {
+    elementarySchool: {
       type: String,
       trim: true,
     },
-    junior_high_school: {
+    elementaryAddress: {
       type: String,
       trim: true,
     },
-    junior_high_address: {
+    elementaryYear: {
       type: String,
       trim: true,
     },
-    senior_high_school: {
+    juniorHighSchool: {
       type: String,
       trim: true,
     },
-    senior_high_address: {
+    juniorHighAddress: {
       type: String,
       trim: true,
     },
-    college_school: {
+    juniorHighYear: {
       type: String,
       trim: true,
     },
-    college_address: {
+    seniorHighSchool: {
+      type: String,
+      trim: true,
+    },
+    seniorHighAddress: {
+      type: String,
+      trim: true,
+    },
+    seniorHighYear: {
+      type: String,
+      trim: true,
+    },
+    seniorHighGwa: {
+      type: String,
+      trim: true,
+    },
+    collegeSchool: {
+      type: String,
+      trim: true,
+    },
+    collegeAddress: {
+      type: String,
+      trim: true,
+    },
+    collegeYear: {
       type: String,
       trim: true,
     },
@@ -127,15 +168,25 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    // legacy fields still around (if used by other parts of the code)
-    title: {
-      type: String,
+    // flags
+    disability: {
+      type: Boolean,
+      default: false,
     },
-    content: {
-      type: String,
+    indigenous: {
+      type: Boolean,
+      default: false,
+    },
+    soloParent: {
+      type: Boolean,
+      default: false,
+    },
+    fourPs: {
+      type: Boolean,
+      default: false,
     },
   },
-  { timestamps: true } // createdAt, updatedAt
+  { timestamps: true }
 );
 
 const Student = mongoose.model("Student", studentSchema);

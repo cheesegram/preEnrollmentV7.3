@@ -7,11 +7,11 @@ import Student from '../models/Student.js';
 dotenv.config({ path: path.resolve(process.cwd(), '-DESKTOP-2T3MSLV.env') });
 
 const sampleStudents = [
-  { student_number: '2023001', name: 'Alice Smith', year: 1, section: 'A', status: 'Enrolled' },
-  { student_number: '2023002', name: 'Bob Jones', year: 2, section: 'B', status: 'Enrolled' },
-  { student_number: '2023003', name: 'Carlos Ruiz', year: 3, section: 'C', status: 'Irregular' },
-  { student_number: '2023004', name: 'Diana King', year: 4, section: 'D', status: 'Enrolled' },
-  { student_number: '2023005', name: 'Eve Lin', year: 1, section: 'B', status: 'Enrolled' },
+  { studentNumber: '2023001', firstName: 'Alice', lastName: 'Smith', year: '1', section: 'A', status: 'Enrolled', semester: '1st' },
+  { studentNumber: '2023002', firstName: 'Bob', lastName: 'Jones', year: '2', section: 'B', status: 'Enrolled', semester: '1st' },
+  { studentNumber: '2023003', firstName: 'Carlos', lastName: 'Ruiz', year: '3', section: 'C', status: 'Irregular', semester: '1st' },
+  { studentNumber: '2023004', firstName: 'Diana', lastName: 'King', year: '4', section: 'D', status: 'Enrolled', semester: '1st' },
+  { studentNumber: '2023005', firstName: 'Eve', lastName: 'Lin', year: '1', section: 'B', status: 'Enrolled', semester: '1st' },
 ];
 
 async function seed() {
@@ -24,9 +24,9 @@ async function seed() {
     await mongoose.connect(process.env.MONGO_URI);
     console.log('Connected to MongoDB');
 
-    // remove any sample students with same student_number to avoid duplicates
-    const numbers = sampleStudents.map(s => s.student_number);
-    await Student.deleteMany({ student_number: { $in: numbers } });
+    // remove any sample students with same studentNumber to avoid duplicates
+    const numbers = sampleStudents.map(s => s.studentNumber);
+    await Student.deleteMany({ studentNumber: { $in: numbers } });
 
     const created = await Student.insertMany(sampleStudents);
     console.log('Inserted', created.length, 'sample students');

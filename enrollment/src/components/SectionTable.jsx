@@ -1,384 +1,209 @@
-import React, { useEffect, useState } from 'react';
-import api from '../lib/axios';
-import Modal from './Modal';
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import Pagination from "./ui/Pagination";
 
-function SectionTable({ sections = [] }) {
-    const [curriculumSection, setCurriculumSection] = useState(null);
-    const [studentSection, setStudentSection] = useState(null);
-    const [studentListKind, setStudentListKind] = useState(null);
-    const [studentRows, setStudentRows] = useState([]);
-    const [studentLoading, setStudentLoading] = useState(false);
-    const [studentError, setStudentError] = useState('');
-    const [selectedCurriculumSubjects, setSelectedCurriculumSubjects] = useState([]);
-    const [curriculumLoading, setCurriculumLoading] = useState(false);
-    const [curriculumError, setCurriculumError] = useState('');
-    const [curriculumCache, setCurriculumCache] = useState({});
+function getCapacityStateStyle(count, capacity) {
+  const currentCount = Number(count || 0);
+  const cap = Number(capacity || 0);
+  if (currentCount >= cap) return "bg-red-100 text-red-700 font-bold";
+  if (currentCount >= cap * 0.8) return "bg-yellow-100 text-yellow-700 font-bold";
+  return "bg-green-100 text-green-700 font-bold";
+}
 
-    const normalizeYearKey = (year) => {
-        const raw = String(year ?? '').trim().toLowerCase();
-        const map = {
-            '1': '1st',
-            '1st': '1st',
-            first: '1st',
-            'first year': '1st',
-            '2': '2nd',
-            '2nd': '2nd',
-            second: '2nd',
-            'second year': '2nd',
-            '3': '3rd',
-            '3rd': '3rd',
-            third: '3rd',
-            'third year': '3rd',
-            '4': '4th',
-            '4th': '4th',
-            fourth: '4th',
-            'fourth year': '4th',
-        };
+function SectionTable({ sections, students, onOpenStudentList, className = "" }) {
+  const [detailSection, setDetailSection] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-        return map[raw] || null;
-    };
+  const sectionList = useMemo(() => (Array.isArray(sections) ? sections : []), [sections]);
+  const studentList = useMemo(() => (Array.isArray(students) ? students : []), [students]);
 
-    const getSemesterIndex = (semester) => {
-        const raw = String(semester ?? '').trim().toLowerCase();
+  const totalPages = Math.max(1, Math.ceil(sectionList.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
 
-        if (['1', '1st', 'first', 'first semester', '1st semester'].includes(raw)) {
-            return 0;
-        }
+  const paginatedSections = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return sectionList.slice(start, start + pageSize);
+  }, [sectionList, safePage, pageSize]);
 
-        if (['2', '2nd', 'second', 'second semester', '2nd semester'].includes(raw)) {
-            return 1;
-        }
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sections]);
 
-        return -1;
-    };
+  const getStudentRowsForSection = (section) => {
+    const year = String(section.year ?? "").trim();
+    const sectionName = String(section.section ?? "").trim().toUpperCase();
+    const semester = String(section.semester ?? "").trim() || "N/A";
+    if (!year || !sectionName) return [];
 
-    const getStatusStyle = (status) => {
-        if (status === 'Available') {
-            return 'bg-green-100 text-green-700 font-bold';
-        }
-        if (status === 'Full') {
-            return 'bg-yellow-100 text-yellow-700 font-bold';
-        }
-        return 'bg-red-100 text-red-700 font-bold';
-    };
+    return studentList.filter((student) => {
+      const sYear = String(student.year ?? "").trim();
+      const sSection = String(student.section ?? "").trim().toUpperCase();
+      const sSemester = String(student.semester ?? "").trim() || "N/A";
+      return sYear === year && sSection === sectionName && sSemester === semester;
+    });
+  };
 
-    const getCapacityStateStyle = (actual, capacity) => {
-        const actualNum = Number(actual || 0);
-        const capacityNum = Number(capacity || 0);
+  const handlePageSizeChange = (nextSize) => {
+    setPageSize(nextSize);
+    setCurrentPage(1);
+  };
 
-        if (actualNum < capacityNum) {
-            return 'text-green-600 font-semibold';
-        }
-        if (actualNum === capacityNum) {
-            return 'text-yellow-600 font-semibold';
-        }
-        return 'text-red-600 font-semibold';
-    };
+  const openDetail = (section) => setDetailSection(section);
+  const closeDetail = () => setDetailSection(null);
 
-    const openStudentList = (section, kind) => {
-        setStudentSection(section);
-        setStudentListKind(kind);
-        setStudentRows([]);
-        setStudentError('');
-    };
+  const detailEntries = detailSection
+    ? Object.entries(detailSection).filter(([key]) => !["_id", "__v"].includes(key))
+    : [];
 
-    const studentModalTitle = studentListKind === 'regular' ? 'Enrolled Students' : 'Irregular Students';
+  const columnCount = 8;
 
-    const handleOpenSectionCurriculum = (section) => {
-        setCurriculumSection(section);
-        setSelectedCurriculumSubjects([]);
-        setCurriculumError('');
-    };
+  return (
+    <div className={`flex h-full min-h-[340px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white font-sans shadow-sm ${className}`}>
+      <div className="h-[420px] min-h-[420px] overflow-auto custom-scrollbar">
+        <table className="min-w-full whitespace-nowrap border-collapse text-left text-sm md:text-base">
+          <thead className="sticky top-0 z-10 border-b border-[#BFD9BC] bg-[#E4F6E2] text-[#173F30]">
+            <tr>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-[#315B46]">Year</th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-[#315B46]">Section</th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-[#315B46]">Semester</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Regular</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Irregular</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Total</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Status</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Students</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {paginatedSections.length > 0 ? (
+              paginatedSections.map((sec) => {
+                const blockCapacity = Number(sec.blockCapacity ?? sec.regularCapacity ?? 45);
+                const irregularCapacity = Number(sec.irregularCapacity ?? 5);
+                const blockCount = Number(sec.blockCount ?? sec.regular ?? 0);
+                const irregularCount = Number(sec.irregularCount ?? sec.irregular ?? 0);
+                const total = blockCount + irregularCount;
+                const studentRows = getStudentRowsForSection(sec);
 
-    useEffect(() => {
-        const fetchSectionCurriculum = async () => {
-            if (!curriculumSection) {
-                setSelectedCurriculumSubjects([]);
-                setCurriculumError('');
-                return;
-            }
+                return (
+                  <tr key={sec._id || `${sec.year}-${sec.section}-${sec.semester}`} className="hover:bg-emerald-50/60 transition-colors">
+                    <td className="px-5 py-4 text-gray-800">{sec.year || "—"}</td>
+                    <td className="px-5 py-4 font-medium text-gray-900">{sec.section || "—"}</td>
+                    <td className="px-5 py-4 text-gray-600">{sec.semester || "—"}</td>
+                    <td className="px-5 py-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onOpenStudentList?.(sec, "block")}
+                        className={`${getCapacityStateStyle(blockCount, blockCapacity)} underline underline-offset-2 hover:opacity-80`}
+                        aria-label={`View enrolled students for section ${sec.section}`}
+                      >
+                        {`${blockCount}/${blockCapacity}`}
+                      </button>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onOpenStudentList?.(sec, "irregular")}
+                        className={`${getCapacityStateStyle(irregularCount, irregularCapacity)} underline underline-offset-2 hover:opacity-80`}
+                        aria-label={`View irregular students for section ${sec.section}`}
+                      >
+                        {`${irregularCount}/${irregularCapacity}`}
+                      </button>
+                    </td>
+                    <td className="px-5 py-4 text-gray-900 font-semibold text-center">{total}</td>
+                    <td className="px-5 py-4 text-center">
+                      <span className="inline-flex items-center justify-center rounded-full px-4 py-1.5 text-xs tracking-wide bg-gray-100 text-gray-700 font-bold">
+                        {sec.status || "Unknown"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => openDetail(sec)}
+                        className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#2E522A] focus:outline-none focus:ring-2 focus:ring-[#2E522A]/50"
+                        aria-label={`View details for section ${sec.section}`}
+                      >
+                        <i className="fa-solid fa-magnifying-glass" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={columnCount} className="px-6 py-12 text-center text-gray-500">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <i className="fa-regular fa-folder-open text-3xl opacity-50" />
+                    <p>No sections found.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-            try {
-                setCurriculumLoading(true);
-                setSelectedCurriculumSubjects([]);
-                setCurriculumError('');
+      <Pagination
+        currentPage={safePage}
+        totalItems={sectionList.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={handlePageSizeChange}
+        pageSizeOptions={[10, 20, 50]}
+      />
 
-                const yearKey = normalizeYearKey(curriculumSection?.year);
-                const semesterIndex = getSemesterIndex(curriculumSection?.semester);
-
-                if (!yearKey || semesterIndex < 0) {
-                    setCurriculumError('Curriculum is unavailable for this section year/semester.');
-                    return;
-                }
-
-                let curriculumDoc = curriculumCache[yearKey];
-                if (!curriculumDoc) {
-                    const res = await api.get(`/curriculum/${yearKey}`);
-                    curriculumDoc = res.data;
-                    setCurriculumCache((prev) => ({ ...prev, [yearKey]: curriculumDoc }));
-                }
-
-                const semesterSubjects = curriculumDoc?.semesters?.[semesterIndex]?.subjects;
-                if (!Array.isArray(semesterSubjects) || semesterSubjects.length === 0) {
-                    setCurriculumError('No curriculum subjects found for this semester.');
-                    return;
-                }
-
-                setSelectedCurriculumSubjects(semesterSubjects);
-            } catch {
-                setCurriculumError('Failed to load curriculum data.');
-            } finally {
-                setCurriculumLoading(false);
-            }
-        };
-
-        fetchSectionCurriculum();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [curriculumSection]);
-
-    useEffect(() => {
-        const fetchSectionStudents = async () => {
-            if (!studentSection || !studentListKind) {
-                setStudentRows([]);
-                setStudentError('');
-                return;
-            }
-
-            try {
-                setStudentLoading(true);
-                setStudentRows([]);
-                setStudentError('');
-
-                const status = studentListKind === 'regular' ? 'Enrolled' : 'Irregular';
-                const params = {
-                    status,
-                    year: String(studentSection.year ?? '').trim(),
-                    section: String(studentSection.section ?? '').trim(),
-                    semester: String(studentSection.semester ?? '').trim(),
-                };
-
-                const res = await api.get('/students', { params });
-                const rows = Array.isArray(res.data) ? res.data : [];
-                rows.sort((left, right) => {
-                    const leftNum = String(left.student_number ?? '');
-                    const rightNum = String(right.student_number ?? '');
-                    return leftNum.localeCompare(rightNum, undefined, { numeric: true, sensitivity: 'base' });
-                });
-                setStudentRows(rows);
-            } catch {
-                setStudentError('Failed to load students.');
-            } finally {
-                setStudentLoading(false);
-            }
-        };
-
-        fetchSectionStudents();
-    }, [studentSection, studentListKind]);
-
-    return (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden font-sans h-full min-h-[380px] flex flex-col w-full">
-            <div className="flex-1 min-h-[380px] overflow-y-auto custom-scrollbar">
-                <table className="min-w-full border-collapse text-left text-sm md:text-base whitespace-nowrap">
-                    <thead className="sticky top-0 z-10 bg-[#E4F6E2] border-b border-[#BFD9BC] text-[#315B46]">
-                        <tr>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46]">Year</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46]">Section</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Regular</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Irregular</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Total</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Capacity</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Curriculum</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Semester</th>
-                            <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-[#315B46] text-center">Status</th>
-                        </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-gray-100">
-                        {sections && sections.length > 0 ? (
-                            sections.map((sec) => {
-                                return (
-                                    <tr key={`${sec.year}-${sec.section}-${sec.semester ?? 'N/A'}`} className="hover:bg-gray-50/80 transition-colors">
-                                        <td className="px-6 py-4 font-medium text-gray-900">{sec.year}</td>
-                                        <td className="px-6 py-4 text-gray-800 font-medium">{sec.section}</td>
-                                        <td className="px-6 py-4 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={() => openStudentList(sec, 'regular')}
-                                                className={`${getCapacityStateStyle(sec.regular, sec.regular_capacity)} underline underline-offset-2 hover:opacity-80`}
-                                                aria-label={`View enrolled students for section ${sec.section}`}
-                                            >
-                                                {`${sec.regular ?? 0}/${sec.regular_capacity ?? 45}`}
-                                            </button>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={() => openStudentList(sec, 'irregular')}
-                                                className={`${getCapacityStateStyle(sec.irregular, sec.irregular_capacity)} underline underline-offset-2 hover:opacity-80`}
-                                                aria-label={`View irregular students for section ${sec.section}`}
-                                            >
-                                                {`${sec.irregular ?? 0}/${sec.irregular_capacity ?? 5}`}
-                                            </button>
-                                        </td>
-                                        <td className="px-6 py-4 text-gray-900 font-semibold text-center">{sec.total}</td>
-                                        <td className="px-6 py-4 text-center text-gray-700 font-medium">{sec.total_capacity}</td>
-
-                                        <td className="px-6 py-4 text-center">
-                                            <button
-                                                onClick={() => handleOpenSectionCurriculum(sec)}
-                                                className="text-gray-400 hover:text-[#2E522A] transition-colors p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2E522A]/50 disabled:hover:bg-transparent disabled:hover:text-gray-400"
-                                                aria-label="View Curriculum"
-                                                title="View Curriculum"
-                                            >
-                                                <i className="fa-solid fa-caret-down text-xl"></i>
-                                            </button>
-                                        </td>
-
-                                        <td className="px-6 py-4 text-gray-700 font-medium text-center">{sec.semester ?? 'N/A'}</td>
-
-                                        <td className="px-6 py-4 text-center">
-                                            <span className={`inline-flex items-center justify-center px-4 py-1.5 rounded-full text-xs tracking-wide w-28 ${getStatusStyle(sec.status)}`}>
-                                                {sec.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        ) : (
-                            <tr>
-                                <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
-                                    <div className="flex flex-col items-center justify-center gap-2">
-                                        <i className="fa-regular fa-folder-open text-3xl opacity-50"></i>
-                                        <p>No sections found.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            <Modal
-                open={Boolean(curriculumSection)}
-                onClose={() => {
-                    setCurriculumSection(null);
-                    setSelectedCurriculumSubjects([]);
-                    setCurriculumError('');
-                }}
-                title={curriculumSection ? `Section Curriculum - Year ${curriculumSection.year}, Section ${curriculumSection.section}` : 'Section Curriculum'}
+      {detailSection &&
+        createPortal(
+          <div className="fixed inset-0 z-[230] flex items-center justify-center overflow-y-auto p-3 sm:p-6">
+            <button
+              type="button"
+              className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+              onClick={closeDetail}
+              aria-label="Close section details"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Section details"
+              className="animate-fade relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/30 bg-white shadow-2xl shadow-slate-950/25"
             >
-                <div className="space-y-4">
-                    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                        <p className="text-sm text-gray-700">
-                            Shared curriculum for all enrolled students in this section.
-                        </p>
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+                <div className="min-w-0">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-700">Section Details</p>
+                  <h3 className="mt-1 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+                    Year {detailSection.year} - Section {detailSection.section}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">{detailSection.semester} Semester</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDetail}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+                  aria-label="Close section details"
+                >
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto bg-slate-50/60 p-4 sm:p-6">
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {detailEntries.map(([key, value]) => (
+                    <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <dt className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-slate-500">
+                        {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
+                      </dt>
+                      <dd className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-800">
+                        {value === null || value === undefined || value === "" ? "—" : String(value)}
+                      </dd>
                     </div>
-
-                    {curriculumLoading ? (
-                        <div className="min-h-[260px] flex flex-col items-center justify-center text-gray-500 gap-3">
-                            <i className="fa-solid fa-circle-notch fa-spin text-3xl text-[#2E522A]"></i>
-                            <p className="text-sm font-medium">Loading curriculum...</p>
-                        </div>
-                    ) : curriculumError ? (
-                        <div className="min-h-[260px] flex flex-col items-center justify-center text-gray-500 gap-2 text-center">
-                            <i className="fa-regular fa-calendar-xmark text-4xl text-gray-400 opacity-70"></i>
-                            <p className="text-base font-semibold text-gray-700">Curriculum details not available.</p>
-                            <p className="text-sm text-gray-500">{curriculumError}</p>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <table className="min-w-full text-sm border-collapse">
-                                <thead className="bg-[#E4F6E2] border-b border-[#BFD9BC] text-[#315B46]">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold">Code</th>
-                                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold">Title</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Lec</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Lab</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Units</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {selectedCurriculumSubjects.map((subject, idx) => (
-                                        <tr key={`${subject.subject_code || subject.code || 'subject'}-${idx}`} className="hover:bg-gray-50/80">
-                                            <td className="px-4 py-3 text-gray-800 font-medium whitespace-nowrap">{subject.subject_code || subject.code || '-'}</td>
-                                            <td className="px-4 py-3 text-gray-700">{subject.title || '-'}</td>
-                                            <td className="px-4 py-3 text-center text-gray-600">{subject.lecture ?? 0}</td>
-                                            <td className="px-4 py-3 text-center text-gray-600">{subject.laboratory ?? 0}</td>
-                                            <td className="px-4 py-3 text-center text-gray-800 font-semibold">{subject.units ?? 0}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-            </Modal>
-
-            <Modal
-                open={Boolean(studentSection && studentListKind)}
-                onClose={() => {
-                    setStudentSection(null);
-                    setStudentListKind(null);
-                    setStudentRows([]);
-                    setStudentError('');
-                }}
-                title={studentSection && studentListKind
-                    ? `${studentModalTitle} - Year ${studentSection.year}, Section ${studentSection.section}`
-                    : 'Students'}
-            >
-                <div className="space-y-4">
-                    {studentLoading ? (
-                        <div className="min-h-[220px] flex flex-col items-center justify-center text-gray-500 gap-3">
-                            <i className="fa-solid fa-circle-notch fa-spin text-3xl text-[#2E522A]"></i>
-                            <p className="text-sm font-medium">Loading students...</p>
-                        </div>
-                    ) : studentError ? (
-                        <div className="min-h-[220px] flex flex-col items-center justify-center text-gray-500 gap-2 text-center">
-                            <i className="fa-regular fa-circle-xmark text-4xl text-gray-400 opacity-70"></i>
-                            <p className="text-base font-semibold text-gray-700">Student list unavailable.</p>
-                            <p className="text-sm text-gray-500">{studentError}</p>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <table className="min-w-full text-sm border-collapse">
-                                <thead className="bg-[#E4F6E2] border-b border-[#BFD9BC] text-[#315B46]">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold">Student Number</th>
-                                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold">Name</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Year</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Semester</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Section</th>
-                                        <th className="px-4 py-3 text-center text-xs uppercase tracking-wider font-semibold">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {studentRows.length > 0 ? studentRows.map((student) => {
-                                        const fullName = `${String(student.first_name ?? '').trim()} ${String(student.last_name ?? '').trim()}`.trim();
-                                        return (
-                                            <tr key={student._id || student.student_number} className="hover:bg-gray-50/80">
-                                                <td className="px-4 py-3 text-gray-800 font-medium whitespace-nowrap">{student.student_number || '-'}</td>
-                                                <td className="px-4 py-3 text-gray-700">{fullName || '-'}</td>
-                                                <td className="px-4 py-3 text-center text-gray-600">{student.year ?? '-'}</td>
-                                                <td className="px-4 py-3 text-center text-gray-600">{student.semester ?? '-'}</td>
-                                                <td className="px-4 py-3 text-center text-gray-600">{student.section ?? '-'}</td>
-                                                <td className="px-4 py-3 text-center text-gray-800 font-semibold">{student.status ?? '-'}</td>
-                                            </tr>
-                                        );
-                                    }) : (
-                                        <tr>
-                                            <td colSpan="6" className="px-4 py-10 text-center text-gray-500">
-                                                No students found in this section.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-            </Modal>
-        </div>
-    );
+                  ))}
+                </dl>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </div>
+  );
 }
 
 export default SectionTable;

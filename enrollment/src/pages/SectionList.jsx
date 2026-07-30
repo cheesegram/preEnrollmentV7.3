@@ -79,7 +79,7 @@ function SectionList() {
             section.semester ?? ""
           )}`;
           const existing = uniqueSections.get(key);
-          if (!existing || Number(section.regular ?? 0) > Number(existing.regular ?? 0)) {
+          if (!existing || Number(section.blockCount ?? section.regular ?? 0) > Number(existing.blockCount ?? existing.regular ?? 0)) {
             uniqueSections.set(key, section);
           }
         });
@@ -87,14 +87,14 @@ function SectionList() {
         const normalized = Array.from(uniqueSections.values())
           .map((section) => ({
             ...section,
-            regular: Number(section.regular ?? 0),
-            irregular: Number(section.irregular ?? 0),
-            regular_capacity: Number(section.regular_capacity ?? 45),
-            irregular_capacity: Number(section.irregular_capacity ?? 5),
-            total_capacity: Number(section.total_capacity ?? 50),
-            total: Number(section.regular ?? 0) + Number(section.irregular ?? 0),
+            blockCount: Number(section.blockCount ?? section.regular ?? 0),
+            irregularCount: Number(section.irregularCount ?? section.irregular ?? 0),
+            blockCapacity: Number(section.blockCapacity ?? section.regularCapacity ?? 45),
+            irregularCapacity: Number(section.irregularCapacity ?? 5),
+            totalCapacity: Number(section.totalCapacity ?? 50),
+            total: Number(section.blockCount ?? section.regular ?? 0) + Number(section.irregularCount ?? section.irregular ?? 0),
           }))
-          .filter((section) => section.regular > 0 || section.irregular > 0);
+          .filter((section) => section.blockCount > 0 || section.irregularCount > 0);
 
         setSections(normalized);
       } catch (error) {

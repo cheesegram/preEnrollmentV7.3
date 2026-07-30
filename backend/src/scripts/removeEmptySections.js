@@ -37,7 +37,6 @@ async function main() {
       const section = normalizeText(student.section).toUpperCase();
       const semester = normalizeSemester(student.semester);
       if (!year || !section) continue;
-
       const key = `${year}::${section}::${semester}`;
       studentCountBySection.set(key, (studentCountBySection.get(key) || 0) + 1);
     }
@@ -48,7 +47,6 @@ async function main() {
         const sectionName = normalizeText(section.section).toUpperCase();
         const semester = normalizeSemester(section.semester);
         if (!year || !sectionName) return false;
-
         const key = `${year}::${sectionName}::${semester}`;
         return (studentCountBySection.get(key) || 0) === 0;
       })
