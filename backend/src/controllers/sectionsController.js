@@ -137,7 +137,40 @@ export async function deleteSectionById(req, res) {
 export async function updateAllSectionsCapacity(req, res) {
   try {
     const totalCapacity = Math.max(0, Number(req.body?.totalCapacity) || 0);
-    const capacities = getSectionCapacities(totalCapacity);
+    const blockCapacity = req.body?.blockCapacity;
+    const irregularCapacity = req.body?.irregularCapacity;
+
+    console.log("[DEBUG] updateAllSectionsCapacity called with:", {
+      totalCapacity,
+      blockCapacity,
+      irregularCapacity,
+      hasManualValues:
+        blockCapacity != null &&
+        irregularCapacity != null &&
+        String(blockCapacity).trim() !== "" &&
+        String(irregularCapacity).trim() !== "",
+    });
+
+    const hasManualValues =
+      blockCapacity != null &&
+      irregularCapacity != null &&
+      String(blockCapacity).trim() !== "" &&
+      String(irregularCapacity).trim() !== "";
+
+    let capacities;
+    if (hasManualValues) {
+      const parsedBlock = Math.max(0, Number(blockCapacity) || 0);
+      const parsedIrregular = Math.max(0, Number(irregularCapacity) || 0);
+      capacities = {
+        totalCapacity: parsedBlock + parsedIrregular,
+        blockCapacity: parsedBlock,
+        irregularCapacity: parsedIrregular,
+      };
+      console.log("[DEBUG] Using manual capacities:", capacities);
+    } else {
+      capacities = getSectionCapacities(totalCapacity);
+      console.log("[DEBUG] Using auto capacities:", capacities);
+    }
 
     const result = await Section.updateMany({}, {
       $set: {
@@ -147,6 +180,8 @@ export async function updateAllSectionsCapacity(req, res) {
         status: getSectionStatus(0, 0, capacities.totalCapacity),
       }
     });
+
+    console.log("[DEBUG] Update result:", { modified: result.modifiedCount, capacities });
 
     res.status(200).json({
       message: "All sections capacity updated successfully",

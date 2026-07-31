@@ -97,25 +97,54 @@ export async function syncSectionFromStudents(sectionIdentity) {
   }
 
   const current = await Section.findOne(identity).lean();
-  const capacities = getSectionCapacities(current?.totalCapacity ?? SECTION_TEMPLATE.totalCapacity);
   const [blockCount, irregularCount] = await Promise.all([
     Student.countDocuments({ ...identity, status: "Block" }),
     Student.countDocuments({ ...identity, status: "Irregular" }),
   ]);
 
-  return Section.findOneAndUpdate(
+  console.log("[DEBUG] syncSectionFromStudents for", identity, {
+    currentTotalCapacity: current?.totalCapacity,
+    currentBlockCapacity: current?.blockCapacity,
+    currentIrregularCapacity: current?.irregularCapacity,
+  });
+
+  let blockCapacity, irregularCapacity, totalCapacity;
+  if (current && current.blockCapacity != null && current.irregularCapacity != null) {
+    blockCapacity = current.blockCapacity;
+    irregularCapacity = current.irregularCapacity;
+    totalCapacity = current.totalCapacity;
+    console.log("[DEBUG] Preserving existing capacities:", { blockCapacity, irregularCapacity, totalCapacity });
+  } else {
+    const capacities = getSectionCapacities(current?.totalCapacity ?? SECTION_TEMPLATE.totalCapacity);
+    blockCapacity = capacities.blockCapacity;
+    irregularCapacity = capacities.irregularCapacity;
+    totalCapacity = capacities.totalCapacity;
+    console.log("[DEBUG] Using default capacities:", { blockCapacity, irregularCapacity, totalCapacity });
+  }
+
+  const result = await Section.findOneAndUpdate(
     identity,
     {
       $set: {
         ...identity,
         blockCount,
         irregularCount,
-        ...capacities,
-        status: getSectionStatus(blockCount, irregularCount, capacities.totalCapacity),
+        blockCapacity,
+        irregularCapacity,
+        totalCapacity,
+        status: getSectionStatus(blockCount, irregularCount, totalCapacity),
       },
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
+
+  console.log("[DEBUG] After sync:", {
+    blockCapacity: result?.blockCapacity,
+    irregularCapacity: result?.irregularCapacity,
+    totalCapacity: result?.totalCapacity,
+  });
+
+  return result;
 }
 
 export async function syncAllSectionsFromStudents() {
