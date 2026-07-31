@@ -4,6 +4,7 @@ import {
   DEFAULT_TOTAL_CAPACITY,
   getSectionCapacities,
   getSectionStatus,
+  rebalanceSections,
   syncAllSectionsFromStudents,
 } from "../services/sectionService.js";
 
@@ -140,17 +141,6 @@ export async function updateAllSectionsCapacity(req, res) {
     const blockCapacity = req.body?.blockCapacity;
     const irregularCapacity = req.body?.irregularCapacity;
 
-    console.log("[DEBUG] updateAllSectionsCapacity called with:", {
-      totalCapacity,
-      blockCapacity,
-      irregularCapacity,
-      hasManualValues:
-        blockCapacity != null &&
-        irregularCapacity != null &&
-        String(blockCapacity).trim() !== "" &&
-        String(irregularCapacity).trim() !== "",
-    });
-
     const hasManualValues =
       blockCapacity != null &&
       irregularCapacity != null &&
@@ -166,10 +156,8 @@ export async function updateAllSectionsCapacity(req, res) {
         blockCapacity: parsedBlock,
         irregularCapacity: parsedIrregular,
       };
-      console.log("[DEBUG] Using manual capacities:", capacities);
     } else {
       capacities = getSectionCapacities(totalCapacity);
-      console.log("[DEBUG] Using auto capacities:", capacities);
     }
 
     const result = await Section.updateMany({}, {
@@ -181,12 +169,24 @@ export async function updateAllSectionsCapacity(req, res) {
       }
     });
 
-    console.log("[DEBUG] Update result:", { modified: result.modifiedCount, capacities });
+    let rebalancedSections = [];
+    const years = await Section.distinct("year");
+    for (const year of years) {
+      const semesters = await Section.distinct("semester", { year });
+      for (const semester of semesters) {
+        const rebalanced = await rebalanceSections(year, semester);
+        rebalancedSections.push(...rebalanced);
+      }
+    }
+
+    console.log("[DEBUG] Capacities sent:", capacities);
+    console.log("[DEBUG] Rebalanced sections count:", rebalancedSections.length);
 
     res.status(200).json({
       message: "All sections capacity updated successfully",
       modified: result.modifiedCount,
-      capacities
+      rebalanced: rebalancedSections.length,
+      sections: rebalancedSections
     });
   } catch (error) {
     console.error("Error in updateAllSectionsCapacity controller", error);

@@ -141,32 +141,45 @@ function SectionList() {
         blockCapacity: previewData.blockCapacity,
         irregularCapacity: previewData.irregularCapacity,
       };
-      console.log("[DEBUG] Sending update payload:", updatePayload);
-      await api.patch("/sections/capacity/all", updatePayload);
+      const response = await api.patch("/sections/capacity/all", updatePayload);
       toast.success("All section capacities updated successfully");
       setShowConfirmation(false);
       setPreviewData(null);
       setCapacityValue(0);
-      const response = await api.get("/sections", { params: { t: Date.now() } });
-      const rawSections = Array.isArray(response.data) ? response.data : [];
-      const uniqueSections = new Map();
-      rawSections.forEach((section) => {
-        const key = `${String(section.year ?? "")}::${String(section.section ?? "")}::${String(section.semester ?? "")}`;
-        const existing = uniqueSections.get(key);
-        if (!existing || Number(section.blockCount ?? section.regular ?? 0) > Number(existing.blockCount ?? existing.regular ?? 0)) {
-          uniqueSections.set(key, section);
-        }
-      });
-      const normalized = Array.from(uniqueSections.values()).map((section) => ({
-        ...section,
-        blockCount: Number(section.blockCount ?? section.regular ?? 0),
-        irregularCount: Number(section.irregularCount ?? section.irregular ?? 0),
-        blockCapacity: Number(section.blockCapacity ?? section.regularCapacity ?? 45),
-        irregularCapacity: Number(section.irregularCapacity ?? 5),
-        totalCapacity: Number(section.totalCapacity ?? 50),
-        total: Number(section.blockCount ?? section.regular ?? 0) + Number(section.irregularCount ?? section.irregular ?? 0),
-      })).filter((section) => section.blockCount > 0 || section.irregularCount > 0);
-      setSections(normalized);
+      
+      if (response.data?.sections && response.data.sections.length > 0) {
+        const normalized = response.data.sections.map((section) => ({
+          ...section,
+          blockCount: Number(section.blockCount ?? section.regular ?? 0),
+          irregularCount: Number(section.irregularCount ?? section.irregular ?? 0),
+          blockCapacity: Number(section.blockCapacity ?? section.regularCapacity ?? 45),
+          irregularCapacity: Number(section.irregularCapacity ?? 5),
+          totalCapacity: Number(section.totalCapacity ?? 50),
+          total: Number(section.blockCount ?? section.regular ?? 0) + Number(section.irregularCount ?? section.irregular ?? 0),
+        })).filter((section) => section.blockCount > 0 || section.irregularCount > 0);
+        setSections(normalized);
+      } else {
+        const sectionsResponse = await api.get("/sections", { params: { t: Date.now() } });
+        const rawSections = Array.isArray(sectionsResponse.data) ? sectionsResponse.data : [];
+        const uniqueSections = new Map();
+        rawSections.forEach((section) => {
+          const key = `${String(section.year ?? "")}::${String(section.section ?? "")}::${String(section.semester ?? "")}`;
+          const existing = uniqueSections.get(key);
+          if (!existing || Number(section.blockCount ?? section.regular ?? 0) > Number(existing.blockCount ?? existing.regular ?? 0)) {
+            uniqueSections.set(key, section);
+          }
+        });
+        const normalized = Array.from(uniqueSections.values()).map((section) => ({
+          ...section,
+          blockCount: Number(section.blockCount ?? section.regular ?? 0),
+          irregularCount: Number(section.irregularCount ?? section.irregular ?? 0),
+          blockCapacity: Number(section.blockCapacity ?? section.regularCapacity ?? 45),
+          irregularCapacity: Number(section.irregularCapacity ?? 5),
+          totalCapacity: Number(section.totalCapacity ?? 50),
+          total: Number(section.blockCount ?? section.regular ?? 0) + Number(section.irregularCount ?? section.irregular ?? 0),
+        })).filter((section) => section.blockCount > 0 || section.irregularCount > 0);
+        setSections(normalized);
+      }
     } catch (error) {
       console.error("Failed to update capacities", error);
       toast.error(error?.response?.data?.message || "Failed to update section capacities");
@@ -219,8 +232,6 @@ function SectionList() {
     const block = manualBlockCapacity === "" ? 0 : parseInt(manualBlockCapacity, 10);
     const irregular = manualIrregularCapacity === "" ? 0 : parseInt(manualIrregularCapacity, 10);
 
-    console.log("[DEBUG] handleManualConfirm:", { manualBlockCapacity, manualIrregularCapacity, block, irregular });
-
     if (isNaN(block) || isNaN(irregular) || block <= 0 || irregular <= 0) {
       setManualError("Both values must be greater than 0");
       return;
@@ -234,7 +245,6 @@ function SectionList() {
       blockCapacity: block,
       irregularCapacity: irregular,
     });
-    console.log("[DEBUG] previewData set:", { totalCapacity: total, blockCapacity: block, irregularCapacity: irregular });
     setShowConfirmation(true);
     setShowCapacityModal(false);
   };

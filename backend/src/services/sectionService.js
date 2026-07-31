@@ -85,11 +85,6 @@ function sectionStudentFilter({ year, semester, section }) {
   };
 }
 
-/**
- * Recalculate and persist one section from its actual students. The first
- * enrolled student causes an upsert based on the JSON template; later students
- * update the same year/semester/section record.
- */
 export async function syncSectionFromStudents(sectionIdentity) {
   const identity = sectionStudentFilter(sectionIdentity);
   if (!identity.year || !identity.section) {
@@ -102,24 +97,16 @@ export async function syncSectionFromStudents(sectionIdentity) {
     Student.countDocuments({ ...identity, status: "Irregular" }),
   ]);
 
-  console.log("[DEBUG] syncSectionFromStudents for", identity, {
-    currentTotalCapacity: current?.totalCapacity,
-    currentBlockCapacity: current?.blockCapacity,
-    currentIrregularCapacity: current?.irregularCapacity,
-  });
-
   let blockCapacity, irregularCapacity, totalCapacity;
   if (current && current.blockCapacity != null && current.irregularCapacity != null) {
     blockCapacity = current.blockCapacity;
     irregularCapacity = current.irregularCapacity;
     totalCapacity = current.totalCapacity;
-    console.log("[DEBUG] Preserving existing capacities:", { blockCapacity, irregularCapacity, totalCapacity });
   } else {
     const capacities = getSectionCapacities(current?.totalCapacity ?? SECTION_TEMPLATE.totalCapacity);
     blockCapacity = capacities.blockCapacity;
     irregularCapacity = capacities.irregularCapacity;
     totalCapacity = capacities.totalCapacity;
-    console.log("[DEBUG] Using default capacities:", { blockCapacity, irregularCapacity, totalCapacity });
   }
 
   const result = await Section.findOneAndUpdate(
@@ -138,13 +125,153 @@ export async function syncSectionFromStudents(sectionIdentity) {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  console.log("[DEBUG] After sync:", {
-    blockCapacity: result?.blockCapacity,
-    irregularCapacity: result?.irregularCapacity,
-    totalCapacity: result?.totalCapacity,
-  });
-
   return result;
+}
+
+export async function rebalanceSections(year, semester) {
+  const filter = {
+    year: String(year ?? "").trim(),
+    semester: String(semester ?? "").trim() || "N/A",
+  };
+
+  const allSections = await Section.find(filter).sort({ section: 1 }).lean();
+  if (allSections.length === 0) {
+    const newSection = createSectionState({
+      year: filter.year,
+      semester: filter.semester,
+      section: "A",
+    });
+    await Section.create(newSection);
+    return [newSection];
+  }
+
+  const blockStudents = await Student.find({ ...filter, status: "Block" }).sort({ studentNumber: 1 }).lean();
+  const irregularStudents = await Student.find({ ...filter, status: "Irregular" }).sort({ studentNumber: 1 }).lean();
+
+  if (blockStudents.length === 0 && irregularStudents.length === 0) {
+    for (const section of allSections) {
+      await Section.findByIdAndDelete(section._id);
+    }
+    const newSection = createSectionState({
+      year: filter.year,
+      semester: filter.semester,
+      section: "A",
+    });
+    await Section.create(newSection);
+    return [newSection];
+  }
+
+  // Group students by section
+  const blockBySection = new Map();
+  const irregularBySection = new Map();
+  
+  for (const student of blockStudents) {
+    if (!blockBySection.has(student.section)) {
+      blockBySection.set(student.section, []);
+    }
+    blockBySection.get(student.section).push(student);
+  }
+  
+  for (const student of irregularStudents) {
+    if (!irregularBySection.has(student.section)) {
+      irregularBySection.set(student.section, []);
+    }
+    irregularBySection.get(student.section).push(student);
+  }
+
+  // Calculate overflow and determine which students to keep
+  const sectionsToKeep = [];
+  const overflowBlock = [];
+  const overflowIrregular = [];
+  
+  for (const section of allSections) {
+    const sectionBlock = blockBySection.get(section.section) || [];
+    const sectionIrregular = irregularBySection.get(section.section) || [];
+    
+    const blockOverflow = Math.max(0, sectionBlock.length - section.blockCapacity);
+    const irregularOverflow = Math.max(0, sectionIrregular.length - section.irregularCapacity);
+    
+    if (sectionBlock.length === 0 && sectionIrregular.length === 0) {
+      await Section.findByIdAndDelete(section._id);
+    } else {
+      sectionsToKeep.push(section);
+      // Collect overflow students (excess beyond capacity)
+      sectionBlock.slice(section.blockCapacity).forEach(s => overflowBlock.push(s));
+      sectionIrregular.slice(section.irregularCapacity).forEach(s => overflowIrregular.push(s));
+    }
+  }
+
+  // Assign overflow students
+  const sectionBlockUsed = {};
+  const sectionIrregularUsed = {};
+  
+  for (const section of sectionsToKeep) {
+    sectionBlockUsed[section.section] = Math.min(blockBySection.get(section.section)?.length || 0, section.blockCapacity);
+    sectionIrregularUsed[section.section] = Math.min(irregularBySection.get(section.section)?.length || 0, section.irregularCapacity);
+  }
+
+  const allOverflow = [...overflowBlock, ...overflowIrregular];
+
+  for (const student of allOverflow) {
+    let assigned = false;
+    
+    if (student.status === "Block") {
+      for (const section of sectionsToKeep) {
+        if (sectionBlockUsed[section.section] < section.blockCapacity) {
+          await Student.findByIdAndUpdate(student._id, { $set: { section: section.section } });
+          sectionBlockUsed[section.section]++;
+          assigned = true;
+          break;
+        }
+      }
+    } else {
+      for (const section of sectionsToKeep) {
+        if (sectionIrregularUsed[section.section] < section.irregularCapacity) {
+          await Student.findByIdAndUpdate(student._id, { $set: { section: section.section } });
+          sectionIrregularUsed[section.section]++;
+          assigned = true;
+          break;
+        }
+      }
+    }
+    
+    if (!assigned && sectionsToKeep.length > 0) {
+      const sourceSection = sectionsToKeep[0];
+      const newLetter = String.fromCharCode(65 + sectionsToKeep.length);
+      const newSection = await Section.create({
+        year: sourceSection.year,
+        semester: sourceSection.semester,
+        section: newLetter,
+        blockCapacity: sourceSection.blockCapacity,
+        irregularCapacity: sourceSection.irregularCapacity,
+        totalCapacity: sourceSection.totalCapacity,
+        blockCount: 0,
+        irregularCount: 0,
+        status: "Available",
+      });
+      sectionsToKeep.push(newSection);
+      
+      if (student.status === "Block") {
+        sectionBlockUsed[newSection.section] = 1;
+      } else {
+        sectionIrregularUsed[newSection.section] = 1;
+      }
+      
+      await Student.findByIdAndUpdate(student._id, { $set: { section: newSection.section } });
+    }
+  }
+
+  await Promise.all(
+    sectionsToKeep.map(section =>
+      syncSectionFromStudents({
+        year: section.year,
+        semester: section.semester,
+        section: section.section,
+      })
+    )
+  );
+
+  return Section.find(filter).sort({ year: 1, section: 1, semester: 1 }).lean();
 }
 
 export async function syncAllSectionsFromStudents() {
