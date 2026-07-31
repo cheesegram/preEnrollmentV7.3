@@ -372,6 +372,20 @@ export async function enrollFromApplicant(req, res) {
     );
 
     addStudentToSectionState(chosenSection, student.status);
+    
+    // Persist section with correct capacities before syncing
+    await Section.findOneAndUpdate(
+      { year: chosenSection.year, section: chosenSection.section, semester: chosenSection.semester },
+      {
+        $set: {
+          blockCapacity: chosenSection.blockCapacity,
+          irregularCapacity: chosenSection.irregularCapacity,
+          totalCapacity: chosenSection.totalCapacity,
+        }
+      },
+      { new: true, upsert: true }
+    );
+    
     await syncSectionFromStudents(student);
 
     res.status(200).json({ message: "Student enrolled successfully", student });
@@ -513,6 +527,20 @@ export async function batchEnrollFromApplicants(req, res) {
         );
 
         addStudentToSectionState(chosenSection, student.status);
+        
+        // Persist section with correct capacities before syncing
+        await Section.findOneAndUpdate(
+          { year: chosenSection.year, section: chosenSection.section, semester: chosenSection.semester },
+          {
+            $set: {
+              blockCapacity: chosenSection.blockCapacity,
+              irregularCapacity: chosenSection.irregularCapacity,
+              totalCapacity: chosenSection.totalCapacity,
+            }
+          },
+          { new: true, upsert: true }
+        );
+        
         await syncSectionFromStudents(student);
 
         results.enrolled.push({

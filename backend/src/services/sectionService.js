@@ -54,7 +54,19 @@ export function getSectionStatus(blockCount = 0, irregularCount = 0, totalCapaci
 }
 
 export function createSectionState({ year, semester, section, sourceSection = null }) {
-  const capacities = getSectionCapacities(sourceSection?.totalCapacity ?? SECTION_TEMPLATE.totalCapacity);
+  let capacities;
+  if (sourceSection && sourceSection.blockCapacity != null && sourceSection.irregularCapacity != null) {
+    const parsedBlock = Math.max(0, Number(sourceSection.blockCapacity) || 0);
+    const parsedIrregular = Math.max(0, Number(sourceSection.irregularCapacity) || 0);
+    capacities = {
+      totalCapacity: parsedBlock + parsedIrregular,
+      blockCapacity: parsedBlock,
+      irregularCapacity: parsedIrregular,
+    };
+  } else {
+    capacities = getSectionCapacities(sourceSection?.totalCapacity ?? SECTION_TEMPLATE.totalCapacity);
+  }
+
   return {
     year: normalizeSectionValue(year),
     semester: normalizeSemester(semester),
@@ -161,108 +173,86 @@ export async function rebalanceSections(year, semester) {
     return [newSection];
   }
 
-  // Group students by section
-  const blockBySection = new Map();
-  const irregularBySection = new Map();
-  
-  for (const student of blockStudents) {
-    if (!blockBySection.has(student.section)) {
-      blockBySection.set(student.section, []);
-    }
-    blockBySection.get(student.section).push(student);
-  }
-  
-  for (const student of irregularStudents) {
-    if (!irregularBySection.has(student.section)) {
-      irregularBySection.set(student.section, []);
-    }
-    irregularBySection.get(student.section).push(student);
-  }
+  const sourceSection = allSections[0];
 
-  // Calculate overflow and determine which students to keep
-  const sectionsToKeep = [];
-  const overflowBlock = [];
-  const overflowIrregular = [];
-  
-  for (const section of allSections) {
-    const sectionBlock = blockBySection.get(section.section) || [];
-    const sectionIrregular = irregularBySection.get(section.section) || [];
-    
-    const blockOverflow = Math.max(0, sectionBlock.length - section.blockCapacity);
-    const irregularOverflow = Math.max(0, sectionIrregular.length - section.irregularCapacity);
-    
-    if (sectionBlock.length === 0 && sectionIrregular.length === 0) {
+  // Calculate how many sections we need based on per-section capacity
+  const blockPerSection = Number(sourceSection.blockCapacity || 1);
+  const irregularPerSection = Number(sourceSection.irregularCapacity || 1);
+
+  const neededBlockSections = Math.max(1, Math.ceil(blockStudents.length / Math.max(0.001, blockPerSection)));
+  const neededIrregularSections = Math.max(1, Math.ceil(irregularStudents.length / Math.max(0.001, irregularPerSection)));
+  const neededTotalSections = Math.max(neededBlockSections, neededIrregularSections);
+
+  // Delete excess sections
+  if (allSections.length > neededTotalSections) {
+    const sectionsToDelete = allSections.slice(neededTotalSections);
+    for (const section of sectionsToDelete) {
       await Section.findByIdAndDelete(section._id);
-    } else {
-      sectionsToKeep.push(section);
-      // Collect overflow students (excess beyond capacity)
-      sectionBlock.slice(section.blockCapacity).forEach(s => overflowBlock.push(s));
-      sectionIrregular.slice(section.irregularCapacity).forEach(s => overflowIrregular.push(s));
     }
   }
 
-  // Assign overflow students
-  const sectionBlockUsed = {};
-  const sectionIrregularUsed = {};
-  
-  for (const section of sectionsToKeep) {
-    sectionBlockUsed[section.section] = Math.min(blockBySection.get(section.section)?.length || 0, section.blockCapacity);
-    sectionIrregularUsed[section.section] = Math.min(irregularBySection.get(section.section)?.length || 0, section.irregularCapacity);
+  // Create additional sections if needed (with correct capacity values)
+  let workingSections = [...allSections.slice(0, neededTotalSections)];
+  while (workingSections.length < neededTotalSections) {
+    const newLetter = String.fromCharCode(65 + workingSections.length);
+    const newSectionData = {
+      year: sourceSection.year,
+      semester: sourceSection.semester,
+      section: newLetter,
+      blockCapacity: sourceSection.blockCapacity,
+      irregularCapacity: sourceSection.irregularCapacity,
+      totalCapacity: sourceSection.totalCapacity,
+      blockCount: 0,
+      irregularCount: 0,
+      status: "Available",
+    };
+    const created = await Section.create(newSectionData);
+    workingSections.push(created);
   }
 
-  const allOverflow = [...overflowBlock, ...overflowIrregular];
+  // Track actual assignment counts as we assign students
+  const sectionBlockCounts = {};
+  const sectionIrregularCounts = {};
+  for (const section of workingSections) {
+    sectionBlockCounts[section.section] = 0;
+    sectionIrregularCounts[section.section] = 0;
+  }
 
-  for (const student of allOverflow) {
+  // Distribute block students across all sections
+  for (const student of blockStudents) {
     let assigned = false;
-    
-    if (student.status === "Block") {
-      for (const section of sectionsToKeep) {
-        if (sectionBlockUsed[section.section] < section.blockCapacity) {
-          await Student.findByIdAndUpdate(student._id, { $set: { section: section.section } });
-          sectionBlockUsed[section.section]++;
-          assigned = true;
-          break;
-        }
-      }
-    } else {
-      for (const section of sectionsToKeep) {
-        if (sectionIrregularUsed[section.section] < section.irregularCapacity) {
-          await Student.findByIdAndUpdate(student._id, { $set: { section: section.section } });
-          sectionIrregularUsed[section.section]++;
-          assigned = true;
-          break;
-        }
+    for (const section of workingSections) {
+      if (sectionBlockCounts[section.section] < Number(section.blockCapacity || 0)) {
+        await Student.findByIdAndUpdate(student._id, { $set: { section: section.section } });
+        sectionBlockCounts[section.section]++;
+        assigned = true;
+        break;
       }
     }
-    
-    if (!assigned && sectionsToKeep.length > 0) {
-      const sourceSection = sectionsToKeep[0];
-      const newLetter = String.fromCharCode(65 + sectionsToKeep.length);
-      const newSection = await Section.create({
-        year: sourceSection.year,
-        semester: sourceSection.semester,
-        section: newLetter,
-        blockCapacity: sourceSection.blockCapacity,
-        irregularCapacity: sourceSection.irregularCapacity,
-        totalCapacity: sourceSection.totalCapacity,
-        blockCount: 0,
-        irregularCount: 0,
-        status: "Available",
-      });
-      sectionsToKeep.push(newSection);
-      
-      if (student.status === "Block") {
-        sectionBlockUsed[newSection.section] = 1;
-      } else {
-        sectionIrregularUsed[newSection.section] = 1;
+    if (!assigned && workingSections.length > 0) {
+      // All sections full - student stays in their current section
+      // (shouldn't happen if we calculated sections correctly, but handle gracefully)
+    }
+  }
+
+  // Distribute irregular students across all sections
+  for (const student of irregularStudents) {
+    let assigned = false;
+    for (const section of workingSections) {
+      if (sectionIrregularCounts[section.section] < Number(section.irregularCapacity || 0)) {
+        await Student.findByIdAndUpdate(student._id, { $set: { section: section.section } });
+        sectionIrregularCounts[section.section]++;
+        assigned = true;
+        break;
       }
-      
-      await Student.findByIdAndUpdate(student._id, { $set: { section: newSection.section } });
+    }
+    if (!assigned && workingSections.length > 0) {
+      // All sections full - student stays in their current section
     }
   }
 
   await Promise.all(
-    sectionsToKeep.map(section =>
+    workingSections.map(section =>
       syncSectionFromStudents({
         year: section.year,
         semester: section.semester,
