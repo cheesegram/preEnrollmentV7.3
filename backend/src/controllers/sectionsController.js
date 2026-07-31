@@ -133,3 +133,28 @@ export async function deleteSectionById(req, res) {
     return res.status(500).json({ message: "Internal server error" });
   }
 }
+
+export async function updateAllSectionsCapacity(req, res) {
+  try {
+    const totalCapacity = Math.max(0, Number(req.body?.totalCapacity) || 0);
+    const capacities = getSectionCapacities(totalCapacity);
+
+    const result = await Section.updateMany({}, {
+      $set: {
+        totalCapacity: capacities.totalCapacity,
+        irregularCapacity: capacities.irregularCapacity,
+        blockCapacity: capacities.blockCapacity,
+        status: getSectionStatus(0, 0, capacities.totalCapacity),
+      }
+    });
+
+    res.status(200).json({
+      message: "All sections capacity updated successfully",
+      modified: result.modifiedCount,
+      capacities
+    });
+  } catch (error) {
+    console.error("Error in updateAllSectionsCapacity controller", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}

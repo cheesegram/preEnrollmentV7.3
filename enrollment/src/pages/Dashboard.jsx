@@ -885,78 +885,85 @@ function Dashboard() {
                                             Confirm Enrollment
                                         </span>
                                     </div>
-                                    <div className="flex flex-col gap-4 p-4 overflow-y-auto flex-1 min-h-0">
-                                        {previewData.blocked.length > 0 && (
-                                            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-sm font-semibold text-red-700">
-                                                        {previewData.blocked.length} applicant(s) blocked (student number already exists)
-                                                    </p>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowBlockedList(!showBlockedList)}
-                                                        className="grid h-8 w-8 place-items-center rounded-lg text-red-600 transition hover:bg-red-100"
-                                                        aria-label="Show blocked applicants"
-                                                        title="Show blocked applicants"
-                                                    >
-                                                        <i className={`fa-solid ${showBlockedList ? 'fa-eye-slash' : 'fa-eye'} text-sm`} />
-                                                    </button>
-                                                </div>
-                                                {showBlockedList && (
-                                                    <div className="mt-3 overflow-y-auto max-h-[30vh] rounded-lg border border-red-200 bg-red-50/50">
-                                                        <table className="min-w-full text-sm">
-                                                            <thead className="sticky top-0 z-10 bg-red-100 border-b border-red-200 text-red-800 uppercase text-xs">
-                                                                <tr>
-                                                                    <th className="px-4 py-2.5 text-left font-semibold">Applicant ID</th>
-                                                                    <th className="px-4 py-2.5 text-left font-semibold">Name</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-red-100">
-                                                                {previewData.blocked.map((item, idx) => (
-                                                                    <tr key={item.applicantID || idx} className="hover:bg-red-100/50">
-                                                                        <td className="px-4 py-2.5 font-medium text-red-900">{item.applicantID}</td>
-                                                                        <td className="px-4 py-2.5 text-red-800">{item.applicant_name}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                    <div className="flex flex-col flex-1 min-h-0">
+                                        <div className="px-4 pt-4 pb-2 shrink-0">
+                                            {previewData.blocked.length > 0 && (
+                                                <div
+                                                    className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 cursor-pointer transition hover:bg-red-100"
+                                                    onClick={() => setShowBlockedList(!showBlockedList)}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-sm font-semibold text-red-700">
+                                                            {previewData.blocked.length} applicant(s) blocked (student number already exists)
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); setShowBlockedList(!showBlockedList); }}
+                                                            className="grid h-8 w-8 place-items-center rounded-lg text-red-600 transition hover:bg-red-100"
+                                                            aria-label="Show blocked applicants"
+                                                            title="Show blocked applicants"
+                                                        >
+                                                            <i className={`fa-solid ${showBlockedList ? 'fa-eye-slash' : 'fa-eye'} text-sm`} />
+                                                        </button>
                                                     </div>
-                                                )}
-                                            </div>
-                                        )}
-                                        {previewData.notFound.length > 0 && (
-                                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                                                <p className="text-sm font-semibold text-amber-700">
-                                                    {previewData.notFound.length} applicant(s) not found
-                                                </p>
-                                            </div>
-                                        )}
-                                        <div className="overflow-y-auto rounded-xl border border-gray-200 bg-white">
-                                            <table className="min-w-full text-sm">
-                                                <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-xs">
-                                                    <tr>
-                                                        <th className="px-4 py-3 text-left">Applicant ID</th>
-                                                        <th className="px-4 py-3 text-left">Name</th>
-                                                        <th className="px-4 py-3 text-center">Assigned Section</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {previewData.placements.map((p, idx) => (
-                                                        <tr key={p.applicantID || idx} className="hover:bg-gray-50/80">
-                                                            <td className="px-4 py-3 font-medium text-gray-900">{p.applicantID}</td>
-                                                            <td className="px-4 py-3 text-gray-800">{p.applicant_name}</td>
-                                                            <td className="px-4 py-3 text-center">
-                                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-                                                                    <i className="fa-solid fa-layer-group text-[0.6rem]" />
-                                                                    Section {p.assigned_section}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                    {showBlockedList && (
+                                                        <div className="mt-3 overflow-y-auto max-h-[30vh] rounded-lg border border-red-200 bg-red-50/50">
+                                                            <table className="min-w-full text-sm">
+                                                                <thead className="sticky top-0 z-10 bg-red-100 border-b border-red-200 text-red-800 uppercase text-xs">
+                                                                    <tr>
+                                                                        <th className="px-4 py-2.5 text-left font-semibold">Applicant ID</th>
+                                                                        <th className="px-4 py-2.5 text-left font-semibold">Name</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-red-100">
+                                                                    {previewData.blocked.map((item, idx) => (
+                                                                        <tr key={item.applicantID || idx} className="hover:bg-red-100/50">
+                                                                            <td className="px-4 py-2.5 font-medium text-red-900">{item.applicantID}</td>
+                                                                            <td className="px-4 py-2.5 text-red-800">{item.applicant_name}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {previewData.notFound.length > 0 && (
+                                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                                                    <p className="text-sm font-semibold text-amber-700">
+                                                        {previewData.notFound.length} applicant(s) not found
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex items-center justify-end gap-3 pt-2">
+                                        <div className="flex-1 min-h-0 overflow-y-auto px-4">
+                                            <div className="rounded-xl border border-gray-200 bg-white h-full">
+                                                <table className="min-w-full text-sm">
+                                                    <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-xs">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left">Applicant ID</th>
+                                                            <th className="px-4 py-3 text-left">Name</th>
+                                                            <th className="px-4 py-3 text-center">Assigned Section</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {previewData.placements.map((p, idx) => (
+                                                            <tr key={p.applicantID || idx} className="hover:bg-gray-50/80">
+                                                                <td className="px-4 py-3 font-medium text-gray-900">{p.applicantID}</td>
+                                                                <td className="px-4 py-3 text-gray-800">{p.applicant_name}</td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                                                                        <i className="fa-solid fa-layer-group text-[0.6rem]" />
+                                                                        Section {p.assigned_section}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        <div className="border-t border-gray-200 bg-white px-4 py-3 flex items-center justify-end gap-3 shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => { setShowEnrollmentPreview(false); setPreviewData(null); }}

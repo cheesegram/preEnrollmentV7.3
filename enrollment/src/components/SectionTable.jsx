@@ -56,7 +56,7 @@ function SectionTable({ sections, students, onOpenStudentList, className = "" })
     ? Object.entries(detailSection).filter(([key]) => !["_id", "__v"].includes(key))
     : [];
 
-  const columnCount = 8;
+  const columnCount = 9;
 
   return (
     <div className={`flex h-full min-h-[340px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white font-sans shadow-sm ${className}`}>
@@ -67,9 +67,10 @@ function SectionTable({ sections, students, onOpenStudentList, className = "" })
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-[#315B46]">Year</th>
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-[#315B46]">Section</th>
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-[#315B46]">Semester</th>
-              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Regular</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Block</th>
               <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Irregular</th>
               <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Total</th>
+              <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Total Capacity</th>
               <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Status</th>
               <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-[#315B46]">Students</th>
             </tr>
@@ -110,6 +111,7 @@ function SectionTable({ sections, students, onOpenStudentList, className = "" })
                       </button>
                     </td>
                     <td className="px-5 py-4 text-gray-900 font-semibold text-center">{total}</td>
+                    <td className="px-5 py-4 text-center">{sec.totalCapacity}</td>
                     <td className="px-5 py-4 text-center">
                       <span className="inline-flex items-center justify-center rounded-full px-4 py-1.5 text-xs tracking-wide bg-gray-100 text-gray-700 font-bold">
                         {sec.status || "Unknown"}

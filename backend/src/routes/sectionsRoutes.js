@@ -5,6 +5,7 @@ import {
   getAllSections,
   getSectionsMeta,
   syncSectionsFromStudents,
+  updateAllSectionsCapacity,
   updateSectionById,
 } from "../controllers/sectionsController.js";
 
@@ -16,5 +17,6 @@ router.get("/meta", getSectionsMeta);
 router.get("/", getAllSections);
 router.patch("/:id", updateSectionById);
 router.delete("/:id", deleteSectionById);
+router.patch("/capacity/all", updateAllSectionsCapacity);
 
 export default router;
