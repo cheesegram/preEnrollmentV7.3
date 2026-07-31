@@ -365,11 +365,11 @@ export async function enrollFromApplicant(req, res) {
     // Insert the student
     await Student.create(student);
 
-    // Archive the applicant and remove it from the applicants collection
-    const ArchivedApplicant = getIitiDbModel("ArchivedApplicant", "archivedapplicants");
-    const { _id: applicantId, ...applicantData } = applicant;
-    await ArchivedApplicant.create({ ...applicantData, status: "Enrolled", archivedAt: now });
-    await Applicant.deleteOne({ _id: applicant._id });
+    // Update the applicant's status to "Enrolled" (keep in applicants collection)
+    await Applicant.updateOne(
+      { _id: applicant._id },
+      { $set: { status: "Enrolled" } }
+    );
 
     addStudentToSectionState(chosenSection, student.status);
     await syncSectionFromStudents(student);
@@ -505,12 +505,12 @@ export async function batchEnrollFromApplicants(req, res) {
 
         await Student.create(student);
 
-        // Archive the applicant and remove it from the applicants collection
+        // Update applicant status to "Enrolled" (keep in applicants collection)
         const Applicant = getIitiDbModel("Applicant", "applicants");
-        const ArchivedApplicant = getIitiDbModel("ArchivedApplicant", "archivedapplicants");
-        const { _id: applicantObjectId, ...applicantData } = applicant;
-        await ArchivedApplicant.create({ ...applicantData, status: "Enrolled", archivedAt: now });
-        await Applicant.deleteOne({ _id: applicant._id });
+        await Applicant.updateOne(
+          { _id: applicant._id },
+          { $set: { status: "Enrolled" } }
+        );
 
         addStudentToSectionState(chosenSection, student.status);
         await syncSectionFromStudents(student);
