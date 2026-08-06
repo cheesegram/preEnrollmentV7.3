@@ -201,8 +201,7 @@ function SectionList() {
   };
 
   const openCapacityModal = () => {
-    const currentCapacity = getCurrentTotalCapacity();
-    setCapacityValue(currentCapacity);
+    setCapacityValue(50);
     setManualBlockCapacity("");
     setManualIrregularCapacity("");
     setManualMode(false);
